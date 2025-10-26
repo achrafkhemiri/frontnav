@@ -1,0 +1,50 @@
+/* Layout global pour tous les composants avec sidebar */
+/* Ce fichier doit être importé dans styles.css */
+
+.layout {
+  display: flex;
+  margin-top: 70px; /* Hauteur de la navbar */
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #f5f7fa;
+  min-height: calc(100vh - 70px);
+}
+
+.content {
+  flex: 1;
+  padding: 32px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(30, 60, 114, 0.06);
+  min-height: calc(100vh - 118px); /* 70px navbar + 24px*2 marges */
+  margin: 24px;
+  font-family: 'Inter', 'Segoe UI', 'Roboto', Arial, sans-serif;
+  transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Sidebar ouverte - nouvelle largeur 280px */
+.layout:not(.sidebar-closed) .content {
+  margin-left: calc(280px + 24px); /* Largeur sidebar + marge */
+}
+
+/* Sidebar fermée - nouvelle largeur 75px */
+.layout.sidebar-closed .content {
+  margin-left: calc(75px + 24px); /* Largeur sidebar fermée + marge */
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .layout {
+    margin-top: 90px; /* Navbar plus haute sur mobile */
+  }
+  
+  .content {
+    margin: 12px;
+    padding: 20px;
+    min-height: calc(100vh - 114px);
+  }
+  
+  .layout:not(.sidebar-closed) .content,
+  .layout.sidebar-closed .content {
+    margin-left: 12px;
+  }
+}

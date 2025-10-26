@@ -1,0 +1,391 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Breadcrumb Navigation -->
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <i class="bi bi-file-earmark-text"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Récapitulatif par Client</h1>
+          <p class="page-subtitle">Consultez l'historique détaillé des voyages par client</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+      <div class="filter-card">
+        <div class="filter-header">
+          <i class="bi bi-funnel-fill"></i>
+          <h3>Sélectionner un client</h3>
+        </div>
+        <div class="filter-body">
+          <div class="client-search-container" style="position: relative;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
+              <i class="bi bi-person-check-fill"></i> Client
+            </label>
+            <input 
+              [(ngModel)]="clientSearchInput" 
+              (input)="onClientSearchInput()"
+              (focus)="onClientSearchInput()"
+              placeholder="Rechercher un client par nom ou numéro..." 
+              class="search-input"
+              autocomplete="off"
+            />
+            <div *ngIf="showClientDropdown && filteredClientsSearch.length > 0" 
+                 (mousedown)="$event.preventDefault()"
+                 class="dropdown-list">
+              <div *ngFor="let cl of filteredClientsSearch" 
+                   (click)="selectClient(cl)"
+                   class="dropdown-item">
+                <div class="client-icon">
+                  <i class="bi bi-person-circle"></i>
+                </div>
+                <div class="client-info">
+                  <div class="client-name">{{ cl.nom }}</div>
+                  <div class="client-numero">{{ cl.numero || 'N/A' }}</div>
+                </div>
+                <i class="bi bi-chevron-right"></i>
+              </div>
+            </div>
+            <div *ngIf="showClientDropdown && filteredClientsSearch.length === 0 && clientSearchInput.trim()" 
+                 class="dropdown-list empty">
+              <i class="bi bi-search"></i> Aucun client trouvé
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Client Details & Table -->
+    <div *ngIf="selectedClient" class="recap-container">
+      <!-- Client Info Card -->
+      <div class="client-info-card" 
+           [style.border]="isClientEnDepassement() ? '3px solid #dc2626' : ''"
+           [style.background]="isClientEnDepassement() ? 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)' : ''">
+        <div class="client-header">
+          <div class="client-avatar" [style.background]="isClientEnDepassement() ? 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)' : ''">
+            <i class="bi bi-person-fill"></i>
+          </div>
+          <div class="client-details">
+            <h2 class="client-title">
+              {{ selectedClient.nom }}
+              <i *ngIf="isClientEnDepassement()" class="bi bi-exclamation-triangle-fill" style="color: #dc2626; margin-left: 12px; font-size: 24px;"></i>
+            </h2>
+            <div class="client-meta">
+              <span class="meta-item">
+                <i class="bi bi-hash"></i>
+                Numéro: <strong>{{ selectedClient.numero || 'N/A' }}</strong>
+              </span>
+              <span class="meta-item">
+                <i class="bi bi-box-seam"></i>
+                Quantité totale: <strong>{{ getQuantiteAutorisee(selectedClient.id) | number:'1.0-2' }} kg</strong>
+              </span>
+              <!-- Per-code autorisation breakdown (styled) -->
+              <div *ngIf="getClientAutorisations(selectedClient.id).length > 0" class="autorisation-section">
+                <div class="autorisation-title">Codes d'autorisation par quantité :</div>
+                <div class="autorisation-list">
+                  <div *ngFor="let a of getClientAutorisations(selectedClient.id)" class="autorisation-item">
+                    <div class="code-block">{{ a.code }}</div>
+                    <div class="stats-block">
+                      <div class="stat">
+                        <div class="stat-label"> Quantité autorisée</div>
+                        <div class="stat-value">{{ a.quantite || 0 }} kg</div>
+                      </div>
+                      <div class="stat">
+                        <div class="stat-label">Vendu</div>
+                        <div class="stat-value sold">{{ getTotalLivreClientForCode(selectedClient.id, a.code) | number:'1.0-2' }} kg</div>
+                      </div>
+                      <div class="stat">
+                        <div class="stat-label">Reste</div>
+                        <div class="stat-value" [ngClass]="getResteClientForCode(selectedClient.id, a.code) >= 0 ? 'positive' : 'negative'">
+                          {{ getResteClientForCode(selectedClient.id, a.code) | number:'1.0-2' }} kg
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <span *ngIf="isClientEnDepassement()" class="meta-item" style="color: #dc2626; font-weight: 700;">
+                <i class="bi bi-exclamation-circle-fill"></i>
+                DÉPASSEMENT DÉTECTÉ !
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Statistics -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+              <i class="bi bi-truck"></i>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">Total Voyages</div>
+              <div class="stat-value">{{ filteredVoyages.length }}</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">
+              <i class="bi bi-box-seam"></i>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">Total Livré</div>
+              <div class="stat-value">{{ getTotalLivre() | number:'1.0-2' }} kg</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" [style.background]="getResteGradient()">
+              <i class="bi bi-bar-chart-fill"></i>
+            </div>
+            <div class="stat-info">
+              <div class="stat-label">Reste</div>
+              <div class="stat-value" [style.color]="getResteColor()">
+                {{ getReste() | number:'1.0-2' }} kg
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar-section">
+        <div class="toolbar-left">
+          <div class="search-box">
+            <i class="bi bi-search"></i>
+            <input 
+              type="text" 
+              class="search-input" 
+              placeholder="Rechercher par matricule, bon de livraison..." 
+              [(ngModel)]="voyageFilter" 
+              (input)="applyFilter()"
+            />
+          </div>
+          <div class="filter-code">
+            <label class="filter-code-label">Code</label>
+            <div class="filter-code-controls">
+              <select class="filter-code-select" [(ngModel)]="selectedAutorisationCode" (change)="applyFilter()">
+                <option value="">Tous les codes</option>
+                <option *ngFor="let code of autorisationCodes" [value]="code">{{ code }}</option>
+              </select>
+              <button *ngIf="selectedAutorisationCode" class="clear-code-btn" (click)="selectedAutorisationCode=''; applyFilter();" title="Effacer le filtre">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </div>
+          </div>
+          <div class="date-filters">
+            <div class="date-filter-item">
+              <label>
+                <i class="bi bi-calendar-range"></i> Date début
+              </label>
+              <input 
+                type="date" 
+                class="date-input" 
+                [(ngModel)]="dateDebut" 
+                (change)="applyFilter()"
+              />
+            </div>
+            <div class="date-filter-item">
+              <label>
+                <i class="bi bi-calendar-check"></i> Date fin
+              </label>
+              <input 
+                type="date" 
+                class="date-input" 
+                [(ngModel)]="dateFin" 
+                (change)="applyFilter()"
+              />
+            </div>
+          </div>
+          <div *ngIf="dateDebut || dateFin" style="margin-top: 12px; padding: 12px; background: #e0e7ff; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+            <i class="bi bi-info-circle-fill" style="color: #667eea; font-size: 16px; flex-shrink: 0;"></i>
+            <div style="font-size: 13px; color: #4338ca; line-height: 1.4;">
+              <strong>Journée de travail :</strong> Les voyages incluent ceux effectués de <strong>7h00</strong> le matin jusqu'à <strong>6h00</strong> le lendemain
+              <span *ngIf="dateDebut && dateFin">, du <strong>{{ dateDebut }}</strong> au <strong>{{ dateFin }}</strong></span>
+              <span *ngIf="dateDebut && !dateFin">, à partir du <strong>{{ dateDebut }}</strong></span>
+              <span *ngIf="!dateDebut && dateFin">, jusqu'au <strong>{{ dateFin }}</strong></span>
+            </div>
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <span class="results-count">
+            <i class="bi bi-list-check"></i>
+            {{ filteredVoyages.length }} voyage(s)
+          </span>
+          <button class="export-btn excel" (click)="exportToExcel()">
+            <i class="bi bi-file-earmark-excel"></i>
+            Excel
+          </button>
+          <button class="export-btn pdf" (click)="exportToPDF()">
+            <i class="bi bi-file-earmark-pdf"></i>
+            PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-container">
+        <table class="modern-table">
+          <thead>
+            <tr>
+              <th (click)="sortBy('date')" class="sortable">
+                <div class="th-content">
+                  <span>Date</span>
+                  <i class="bi" [ngClass]="{
+                    'bi-chevron-down': sortColumn === 'date' && sortDirection === 'desc',
+                    'bi-chevron-up': sortColumn === 'date' && sortDirection === 'asc',
+                    'bi-chevron-expand': sortColumn !== 'date'
+                  }"></i>
+                </div>
+              </th>
+              <th>Bon de Livraison</th>
+              <th>Ticket</th>
+              <th (click)="sortBy('matricule')" class="sortable">
+                <div class="th-content">
+                  <span>Matricule Camion</span>
+                  <i class="bi" [ngClass]="{
+                    'bi-chevron-down': sortColumn === 'matricule' && sortDirection === 'desc',
+                    'bi-chevron-up': sortColumn === 'matricule' && sortDirection === 'asc',
+                    'bi-chevron-expand': sortColumn !== 'matricule'
+                  }"></i>
+                </div>
+              </th>
+              <th>Chauffeur</th>
+              <th (click)="sortBy('poidsClient')" class="sortable">
+                <div class="th-content">
+                  <span>Poids Voyage (kg)</span>
+                  <i class="bi" [ngClass]="{
+                    'bi-chevron-down': sortColumn === 'poidsClient' && sortDirection === 'desc',
+                    'bi-chevron-up': sortColumn === 'poidsClient' && sortDirection === 'asc',
+                    'bi-chevron-expand': sortColumn !== 'poidsClient'
+                  }"></i>
+                </div>
+              </th>
+              <th (click)="sortBy('reste')" class="sortable">
+                <div class="th-content">
+                  <span>Reste (kg)</span>
+                  <i class="bi" [ngClass]="{
+                    'bi-chevron-down': sortColumn === 'reste' && sortDirection === 'desc',
+                    'bi-chevron-up': sortColumn === 'reste' && sortDirection === 'asc',
+                    'bi-chevron-expand': sortColumn !== 'reste'
+                  }"></i>
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let voyage of paginatedVoyages; let i = index" class="table-row"
+                [style.background-color]="isClientEnDepassement() ? '#fee2e2' : ''"
+                [style.border-left]="isClientEnDepassement() ? '4px solid #dc2626' : ''">
+              <td>
+                <span class="date-badge">
+                  <i class="bi bi-calendar-event"></i>
+                  {{ voyage.date }}
+                </span>
+              </td>
+              <td>{{ voyage.numBonLivraison }}</td>
+              <td>{{ voyage.numTicket }}</td>
+              <td>
+                <span class="camion-badge">
+                  <i class="bi bi-truck"></i>
+                  {{ getCamionMatricule(voyage.camionId) }}
+                </span>
+              </td>
+              <td>{{ getChauffeurNom(voyage.chauffeurId) }}</td>
+              <td>
+                <span class="poids-badge" style="display:flex; align-items:center; gap:8px;">
+                  <span>{{ voyage.poidsClient | number:'1.0-2' }}</span>
+                  <small *ngIf="$any(voyage).autorisationCode || $any(voyage).autorisation?.code" class="code-badge" style="background:#eef2ff; color:#3730a3; padding:2px 6px; border-radius:6px; font-weight:700; font-size:12px;">{{ $any(voyage).autorisationCode || $any(voyage).autorisation?.code }}</small>
+                </span>
+              </td>
+              <td>
+                <span class="reste-badge" 
+                      [style.background]="isClientEnDepassement() ? '#dc2626' : getResteBadgeColor(getResteCumule(voyage, i) || 0)" 
+                      [style.color]="'white'">
+                  <!-- show per-code remainder when voyage has a code -->
+                  <ng-container *ngIf="$any(voyage).autorisationCode || $any(voyage).autorisation?.code; else overallReste">
+                    {{ getResteCumuleForVoyageByCode(voyage, i) | number:'1.0-2' }}
+                    <i *ngIf="getResteCumuleForVoyageByCode(voyage, i) < 0" class="bi bi-exclamation-triangle-fill" style="margin-left: 6px;"></i>
+                  </ng-container>
+                  <ng-template #overallReste>
+                    {{ getResteCumule(voyage, i) | number:'1.0-2' }}
+                    <i *ngIf="getResteCumule(voyage, i) < 0" class="bi bi-exclamation-triangle-fill" style="margin-left: 6px;"></i>
+                  </ng-template>
+                </span>
+              </td>
+            </tr>
+            <tr *ngIf="paginatedVoyages.length === 0" class="no-data-row">
+              <td colspan="7">
+                <div class="no-data">
+                  <i class="bi bi-inbox"></i>
+                  <p>Aucun voyage trouvé pour ce client</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot *ngIf="paginatedVoyages.length > 0">
+            <tr class="total-row">
+              <td colspan="5" style="text-align: right; font-weight: 700; color: #1e293b;">
+                <i class="bi bi-calculator"></i> TOTAL:
+              </td>
+              <td>
+                <span class="total-badge">
+                  {{ getTotalLivre() | number:'1.0-2' }} kg
+                </span>
+              </td>
+              <td>
+                <span class="total-badge" [style.color]="getResteColor()">
+                  {{ getReste() | number:'1.0-2' }} kg
+                </span>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination-container" *ngIf="filteredVoyages.length > 0">
+        <div class="pagination-info">
+          Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredVoyages.length) }} sur {{ filteredVoyages.length }} voyage(s)
+        </div>
+        <div class="pagination-controls">
+          <button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+            <i class="bi bi-chevron-double-left"></i>
+          </button>
+          <button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+          <button 
+            *ngFor="let page of getPageNumbers()" 
+            class="page-btn" 
+            [class.active]="page === currentPage"
+            (click)="goToPage(page)"
+          >
+            {{ page }}
+          </button>
+          <button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+          <button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+            <i class="bi bi-chevron-double-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State -->
+    <div *ngIf="!selectedClient" class="empty-state">
+      <div class="empty-icon">
+        <i class="bi bi-person-x"></i>
+      </div>
+      <h3>Aucun client sélectionné</h3>
+      <p>Veuillez sélectionner un client pour voir le récapitulatif de ses voyages</p>
+    </div>
+  </main>
+</div>

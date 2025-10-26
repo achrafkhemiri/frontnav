@@ -1,0 +1,144 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Breadcrumb Navigation -->
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <i class="bi bi-person-badge"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Chauffeurs</h1>
+          <p class="page-subtitle">{{ filteredChauffeurs.length }} chauffeur(s) trouvé(s)</p>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="error" class="error">{{ error }}</div>
+
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Rechercher par nom ou CIN..." 
+          [(ngModel)]="chauffeurFilter" 
+          (input)="filterChauffeurs()"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredChauffeurs.length }} résultat(s)</span>
+        <div class="page-size-selector">
+          <span>Afficher</span>
+          <select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+          <span>lignes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <table class="modern-table">
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortBy('id')">
+              <div class="th-content">
+                <span>ID</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'id' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'id' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'id'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('nom')">
+              <div class="th-content">
+                <span>Nom</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'nom' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'nom' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'nom'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('numCin')">
+              <div class="th-content">
+                <span>CIN</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'numCin' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'numCin' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'numCin'
+                }"></i>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let ch of paginatedChauffeurs" class="table-row">
+            <td class="id-cell">{{ ch.id }}</td>
+            <td>{{ ch.nom }}</td>
+            <td>{{ ch.numCin }}</td>
+          </tr>
+          <tr *ngIf="paginatedChauffeurs.length === 0" class="no-data-row">
+            <td colspan="3">
+              <div class="no-data">
+                <i class="bi bi-inbox"></i>
+                <p>Aucun chauffeur trouvé</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="filteredChauffeurs.length > 0">
+      <div class="pagination-info">
+        Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredChauffeurs.length) }} sur {{ filteredChauffeurs.length }} chauffeur(s)
+      </div>
+      <div class="pagination-controls">
+        <button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button 
+          *ngFor="let page of getPageNumbers()" 
+          class="page-btn" 
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Dialog modal -->
+    <div class="dialog-backdrop" *ngIf="showAddDialog" (click)="cancel()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()">
+        <h3>{{ editMode ? 'Modifier le chauffeur' : 'Ajouter un chauffeur' }}</h3>
+        <input [(ngModel)]="dialogChauffeur.nom" placeholder="Nom" />
+        <input [(ngModel)]="dialogChauffeur.numCin" placeholder="Numéro CIN" />
+        <div class="dialog-actions">
+          <button (click)="editMode ? updateChauffeur() : saveChauffeur()">{{ editMode ? 'Enregistrer' : 'Ajouter' }}</button>
+          <button (click)="cancel()">Annuler</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

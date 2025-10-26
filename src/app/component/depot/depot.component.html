@@ -1,0 +1,534 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Breadcrumb Navigation -->
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <i class="bi bi-boxes"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Dépôts</h1>
+          <p class="page-subtitle">{{ filteredDepots.length }} dépôt(s) trouvé(s)</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <button class="export-btn excel-btn" (click)="exportToExcel()" title="Exporter en Excel">
+          <i class="bi bi-file-earmark-excel"></i>
+          <span>Excel</span>
+        </button>
+        <button class="export-btn pdf-btn" (click)="exportToPDF()" title="Exporter en PDF">
+          <i class="bi bi-file-earmark-pdf"></i>
+          <span>PDF</span>
+        </button>
+        <button class="add-btn" (click)="openAddDialog()" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Ajouter un nouveau dépôt'">
+          <i class="bi bi-plus-lg"></i>
+          <span>Ajouter un dépôt</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Rechercher par nom..." 
+          [(ngModel)]="depotFilter" 
+          (input)="applyFilter()"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredDepots.length }} résultat(s)</span>
+        <div class="page-size-selector">
+          <span>Afficher</span>
+          <select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+          <span>lignes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Buttons -->
+    <div class="filter-section" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <button 
+          class="filter-btn" 
+          [class.active]="!dateFilterActive"
+          (click)="clearDateFilter()"
+          style="flex: 1; min-width: 150px;">
+          <i class="bi bi-list-ul"></i>
+          <span>Tous les dépôts</span>
+          <span class="filter-badge">{{ filteredDepots.length }}</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="dateFilterActive"
+          (click)="toggleDateFilter()"
+          style="flex: 1; min-width: 150px;">
+          <i class="bi bi-calendar-event"></i>
+          <span>Filtrer par date</span>
+          <span class="filter-badge" *ngIf="dateDebut || dateFin">1</span>
+        </button>
+      </div>
+      
+      <!-- Date Filter Details -->
+      <div *ngIf="dateFilterActive" class="filter-details" style="margin-top: 16px; padding: 16px; background: #fef3c7; border-radius: 12px; border-left: 4px solid #fbbf24;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
+          <i class="bi bi-calendar3"></i> Sélectionner une plage de dates
+        </label>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+              Date début
+            </label>
+            <input 
+              type="date" 
+              [(ngModel)]="dateDebut" 
+              (change)="onDateFilterChange()"
+              [max]="today"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #fcd34d; border-radius: 8px; font-size: 14px;"
+            />
+          </div>
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+              Date fin
+            </label>
+            <input 
+              type="date" 
+              [(ngModel)]="dateFin" 
+              (change)="onDateFilterChange()"
+              [max]="today"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #fcd34d; border-radius: 8px; font-size: 14px;"
+            />
+          </div>
+          <button 
+            *ngIf="dateDebut || dateFin"
+            (click)="clearDateFilter()"
+            style="padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.3s ease; align-self: flex-end;"
+            onmouseover="this.style.background='#dc2626'"
+            onmouseout="this.style.background='#ef4444'">
+            <i class="bi bi-x-circle"></i> Effacer
+          </button>
+        </div>
+        <div *ngIf="dateDebut || dateFin" style="margin-top: 12px; padding: 12px; background: #fef3c7; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+          <i class="bi bi-info-circle-fill" style="color: #f59e0b; font-size: 16px; flex-shrink: 0;"></i>
+          <div style="font-size: 13px; color: #92400e; line-height: 1.4;">
+            <strong>Journée de travail :</strong> Les quantités incluent les voyages de <strong>7h00</strong> le matin jusqu'à <strong>6h00</strong> le lendemain
+            <span *ngIf="dateDebut && dateFin">, du <strong>{{ formatDate(dateDebut) }}</strong> au <strong>{{ formatDate(dateFin) }}</strong></span>
+            <span *ngIf="dateDebut && !dateFin">, à partir du <strong>{{ formatDate(dateDebut) }}</strong></span>
+            <span *ngIf="!dateDebut && dateFin">, jusqu'au <strong>{{ formatDate(dateFin) }}</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <table class="modern-table">
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortBy('nom')">
+              <div class="th-content">
+                <span>Nom</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'nom' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'nom' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'nom'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('adresse')">
+              <div class="th-content">
+                <span>Adresse</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'adresse' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'adresse' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'adresse'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortBy('mf')">
+              <div class="th-content">
+                <span>Matricule Fiscal</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'mf' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'mf' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'mf'
+                }"></i>
+              </div>
+            </th>
+            <th class="text-center quantity-header" *ngIf="isProjetActif()">
+              <div class="th-content">
+                <i class="bi bi-archive-fill"></i>
+                <span>Qté Autorisée</span>
+              </div>
+            </th>
+            <th class="text-center quantity-header" *ngIf="isProjetActif()">
+              <div class="th-content">
+                <i class="bi bi-box-seam-fill"></i>
+                <span>Qté Livrée</span>
+              </div>
+            </th>
+            <th class="text-center quantity-header" *ngIf="isProjetActif()">
+              <div class="th-content">
+                <i class="bi bi-clipboard-check-fill"></i>
+                <span>Reste</span>
+              </div>
+            </th>
+            <th class="text-center quantity-header" *ngIf="!isProjetActif()">
+              <div class="th-content">
+                <i class="bi bi-box-seam-fill"></i>
+                <span>Quantité Vendue</span>
+              </div>
+            </th>
+            <th class="actions-header text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let dep of paginatedDepots" class="table-row">
+            <td>
+              <i class="bi bi-box-seam" style="margin-right: 8px; color: #6366f1;"></i>
+              {{ dep.nom }}
+            </td>
+            <td>
+              <i class="bi bi-geo-alt" style="margin-right: 8px; color: #10b981;"></i>
+              {{ dep.adresse || '-' }}
+            </td>
+            <td>
+              <i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
+              {{ dep.mf || '-' }}
+            </td>
+            <td class="text-center" *ngIf="isProjetActif()">
+              <span class="quantity-badge quantity-badge-primary" style="cursor: pointer;" (click)="openEditQuantiteModal(dep)" title="Cliquer pour modifier">
+                <i class="bi bi-archive-fill"></i>
+                <span class="quantity-value">{{ dep.quantiteAutorisee | number:'1.0-2' }}</span>
+                <i class="bi bi-pencil-fill" style="margin-left: 6px; font-size: 11px;"></i>
+              </span>
+            </td>
+            <td class="text-center" *ngIf="isProjetActif()">
+              <span class="quantity-badge quantity-badge-info">
+                <i class="bi bi-box-seam-fill"></i>
+                <span class="quantity-value">{{ getQuantiteLivree(dep) | number:'1.0-2' }}</span>
+              </span>
+            </td>
+            <td class="text-center" *ngIf="isProjetActif()">
+              <span class="quantity-badge" [ngClass]="{
+                'quantity-badge-success': getReste(dep) > 0,
+                'quantity-badge-warning': getReste(dep) === 0,
+                'quantity-badge-danger': getReste(dep) < 0
+              }">
+                <i class="bi" [ngClass]="{
+                  'bi-check-circle-fill': getReste(dep) > 0,
+                  'bi-exclamation-triangle-fill': getReste(dep) === 0,
+                  'bi-x-circle-fill': getReste(dep) < 0
+                }"></i>
+                <span class="quantity-value">{{ getReste(dep) | number:'1.0-2' }}</span>
+              </span>
+            </td>
+            <td class="text-center" *ngIf="!isProjetActif()">
+              <span class="quantity-badge">
+                <i class="bi bi-box-seam-fill"></i>
+                <span class="quantity-value">{{ getQuantiteLivree(dep) | number:'1.0-2' }}</span>
+              </span>
+            </td>
+            <td class="actions-cell">
+              <button class="action-btn edit-btn" (click)="selectDepot(dep)" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Modifier'">
+                <i class="bi bi-pencil-fill"></i>
+              </button>
+              <button class="action-btn delete-btn" (click)="deleteDepot(dep.id)" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Supprimer'">
+                <i class="bi bi-trash-fill"></i>
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="paginatedDepots.length === 0" class="no-data-row">
+            <td [attr.colspan]="isProjetActif() ? 9 : 5">
+              <div class="no-data">
+                <i class="bi bi-inbox"></i>
+                <p *ngIf="!isProjetActif()">Aucun dépôt trouvé</p>
+                <p *ngIf="isProjetActif()">Aucun dépôt associé à ce projet</p>
+                <p *ngIf="isProjetActif()" style="font-size: 13px; color: #64748b; margin-top: 8px;">
+                  Ajoutez un nouveau dépôt pour ce projet
+                </p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="filteredDepots.length > 0">
+      <div class="pagination-info">
+        Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredDepots.length) }} sur {{ filteredDepots.length }} dépôt(s)
+      </div>
+      <div class="pagination-controls">
+        <button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button 
+          *ngFor="let page of getPageNumbers()" 
+          class="page-btn" 
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)"
+        >
+          {{ page }}
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Dialog modal -->
+    <div class="dialog-backdrop" *ngIf="showAddDialog || editMode" (click)="closeDialog()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()">
+        <h3>{{ editMode ? 'Modifier le dépôt' : 'Ajouter un dépôt' }}</h3>
+        
+        <!-- Message d'information pour l'autocomplétion -->
+        <div *ngIf="!editMode && selectedExistingDepot" style="background: #dbeafe; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; border-left: 4px solid #3b82f6;">
+          <div style="display: flex; align-items: center; gap: 8px; color: #1e40af;">
+            <i class="bi bi-info-circle-fill"></i>
+            <span style="font-weight: 500;">Dépôt existant sélectionné : il sera associé à ce projet</span>
+          </div>
+        </div>
+        
+        <!-- Champ Nom avec autocomplétion -->
+        <div style="position: relative; margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+            <i class="bi bi-box-seam" style="margin-right: 6px;"></i>
+            Nom du dépôt
+          </label>
+          <input 
+            [(ngModel)]="dialogDepot.nom" 
+            (input)="onDepotInputChange()"
+            (blur)="closeSuggestions()"
+            placeholder="Rechercher ou créer un dépôt..." 
+            [disabled]="editMode"
+            style="width: 100%;" 
+          />
+          
+          <!-- Liste de suggestions -->
+          <div *ngIf="showSuggestions && filteredSuggestions.length > 0" 
+               style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+            <div *ngFor="let depot of filteredSuggestions" 
+                 class="autocomplete-suggestion"
+                 (mousedown)="selectSuggestion(depot)"
+                 style="padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f5f9; transition: background-color 0.2s;">
+              <i class="bi bi-box-seam" style="color: #6366f1; font-size: 18px;"></i>
+              <div class="suggestion-details" style="flex: 1;">
+                <div class="suggestion-name" style="font-weight: 500; color: #1e293b;">{{ depot.nom }}</div>
+              </div>
+              <i class="bi bi-plus-circle suggestion-icon-return" style="color: #64748b; font-size: 16px;"></i>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Champ Adresse -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+            <i class="bi bi-geo-alt" style="margin-right: 6px;"></i>
+            Adresse
+          </label>
+          <input 
+            [(ngModel)]="dialogDepot.adresse" 
+            placeholder="Adresse du dépôt..." 
+            style="width: 100%;" 
+          />
+        </div>
+        
+        <!-- Champ Matricule Fiscal -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+            <i class="bi bi-file-text" style="margin-right: 6px;"></i>
+            Matricule Fiscal (MF)
+          </label>
+          <input 
+            [(ngModel)]="dialogDepot.mf" 
+            placeholder="Matricule fiscal..." 
+            style="width: 100%;" 
+          />
+        </div>
+        
+        <div class="dialog-actions">
+          <button *ngIf="!editMode" (click)="addDialogDepot()" [disabled]="!canAddData()">
+            <i class="bi" [ngClass]="selectedExistingDepot ? 'bi-link-45deg' : 'bi-plus-lg'"></i>
+            {{ selectedExistingDepot ? 'Associer' : 'Créer' }}
+          </button>
+          <button *ngIf="editMode" (click)="updateDialogDepot()" [disabled]="!canAddData()">Enregistrer</button>
+          <button (click)="closeDialog()">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de confirmation de suppression -->
+    <div class="dialog-backdrop" *ngIf="showConfirmModal" (click)="cancelDelete()">
+      <div class="confirm-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header-confirm">
+          <i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+          <h3>{{ modalTitle }}</h3>
+        </div>
+        <div class="modal-body-confirm">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-actions-confirm">
+          <button class="btn-cancel" (click)="cancelDelete()">
+            <i class="bi bi-x-lg"></i>
+            Annuler
+          </button>
+          <button class="btn-confirm-delete" (click)="confirmDelete()">
+            <i class="bi bi-trash-fill"></i>
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal d'erreur -->
+    <div class="dialog-backdrop" *ngIf="showErrorModal" (click)="closeErrorModal()">
+      <div class="error-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header-error">
+          <i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+          <h3>{{ modalTitle }}</h3>
+        </div>
+        <div class="modal-body-error">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-actions-error">
+          <button class="btn-close-error" (click)="closeErrorModal()">
+            <i class="bi bi-check-lg"></i>
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal d'alerte moderne -->
+<div class="alert-modal-backdrop" *ngIf="showAlert" (click)="closeAlert()">
+  <div class="alert-modal" [ngClass]="{
+    'alert-modal-success': alertType === 'success',
+    'alert-modal-danger': alertType === 'danger',
+    'alert-modal-warning': alertType === 'warning',
+    'alert-modal-info': alertType === 'info'
+  }">
+    <div class="alert-modal-icon">
+      <i class="bi" [ngClass]="{
+        'bi-check-circle-fill': alertType === 'success',
+        'bi-exclamation-triangle-fill': alertType === 'danger',
+        'bi-exclamation-circle-fill': alertType === 'warning',
+        'bi-info-circle-fill': alertType === 'info'
+      }"></i>
+    </div>
+    <h3 class="alert-modal-title">{{ getAlertTitle() }}</h3>
+    <p class="alert-modal-message">{{ alertMessage }}</p>
+    <button class="alert-modal-btn" (click)="closeAlert()">
+      <i class="bi bi-check-lg"></i> D'accord
+    </button>
+  </div>
+</div>
+
+<!-- Modal pour la quantité autorisée -->
+<div class="dialog-backdrop" *ngIf="showQuantiteModal" [@fadeIn] (click)="cancelAddDepotWithQuantite()">
+  <div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+    <div class="quantite-modal-header">
+      <div class="quantite-modal-icon">
+        <i class="bi bi-calculator"></i>
+      </div>
+      <h3 class="quantite-modal-title">Quantité autorisée</h3>
+      <p class="quantite-modal-subtitle">
+        Définir la quantité autorisée pour ce dépôt sur le projet actif
+        <strong *ngIf="contextProjet || projetActif">
+          "{{ (contextProjet || projetActif).nom }}"
+        </strong>
+      </p>
+    </div>
+    
+    <div class="quantite-modal-body">
+      <label class="quantite-label">
+        <i class="bi bi-box-seam"></i> Quantité autorisée
+      </label>
+      <input 
+        type="text" 
+        [(ngModel)]="quantiteAutorisee" 
+        placeholder="Entrer la quantité (0 pour aucune limite)"
+        class="quantite-input"
+        min="0"
+        step="0.01"
+        autofocus
+        (keyup.enter)="confirmAddDepotWithQuantite()"
+      />
+      <p class="quantite-hint">
+        <i class="bi bi-info-circle"></i> 
+        Laisser 0 si vous ne souhaitez pas définir de limite pour ce dépôt
+      </p>
+    </div>
+    
+    <div class="quantite-modal-actions">
+      <button class="btn-cancel" (click)="cancelAddDepotWithQuantite()">
+        <i class="bi bi-x-lg"></i> Annuler
+      </button>
+      <button class="btn-confirm" (click)="confirmAddDepotWithQuantite()">
+        <i class="bi bi-check-lg"></i> Confirmer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de modification de quantité -->
+<div class="dialog-backdrop" *ngIf="showEditQuantiteModal" [@fadeIn] (click)="cancelEditQuantite()">
+  <div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+    <div class="quantite-modal-header">
+      <div class="quantite-modal-icon">
+        <i class="bi bi-pencil-square"></i>
+      </div>
+      <h3 class="quantite-modal-title">Modifier la quantité autorisée</h3>
+      <p class="quantite-modal-subtitle" *ngIf="editingDepot">
+        Dépôt : <strong>{{ editingDepot.nom }}</strong>
+      </p>
+    </div>
+    
+    <div class="quantite-modal-body">
+      <label class="quantite-label">
+        <i class="bi bi-box-seam"></i> Nouvelle quantité autorisée
+      </label>
+      <input 
+        type="text" 
+        [(ngModel)]="newQuantiteAutorisee" 
+        placeholder="Entrer la nouvelle quantité"
+        class="quantite-input"
+        min="0"
+        step="0.01"
+        autofocus
+        (keyup.enter)="confirmEditQuantite()"
+      />
+      <p class="quantite-hint" *ngIf="editingDepot">
+        <i class="bi bi-info-circle"></i> 
+        La quantité actuelle est de {{ editingDepot.quantiteAutorisee | number:'1.0-2' }} kg
+      </p>
+    </div>
+    
+    <div class="quantite-modal-actions">
+      <button class="btn-cancel" (click)="cancelEditQuantite()">
+        <i class="bi bi-x-lg"></i> Annuler
+      </button>
+      <button class="btn-confirm" (click)="confirmEditQuantite()">
+        <i class="bi bi-check-lg"></i> Confirmer
+      </button>
+    </div>
+  </div>
+</div>

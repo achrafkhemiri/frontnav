@@ -1,0 +1,22 @@
+<div class="breadcrumb-container">
+  <button *ngIf="showBackButton" class="back-btn" (click)="goBack()" title="Retour">
+    <i class="bi bi-arrow-left"></i>
+    <span>Retour</span>
+  </button>
+  
+  <nav class="breadcrumb-nav">
+    <ol class="breadcrumb">
+      <li *ngFor="let item of items; let last = last" 
+          class="breadcrumb-item" 
+          [class.active]="last">
+        <a *ngIf="!last && item.url" 
+           (click)="navigate(item)" 
+           class="breadcrumb-link">
+          {{ item.label }}
+        </a>
+        <span *ngIf="last || !item.url">{{ item.label }}</span>
+        <i *ngIf="!last" class="bi bi-chevron-right separator"></i>
+      </li>
+    </ol>
+  </nav>
+</div>

@@ -1,0 +1,7 @@
+@import '~@fortawesome/fontawesome-free/css/all.min.css';
+/* You can add global styles to this file, and also import other style files */
+@import '@angular/material/prebuilt-themes/indigo-pink.css';
+
+/* Import global layout styles */
+@import './styles-layout.css';
+@import './styles-table.css';

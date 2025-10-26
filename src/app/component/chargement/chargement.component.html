@@ -1,0 +1,946 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+
+  <main class="content">
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-content">
+        <div class="page-icon">
+          <i class="bi bi-box-seam"></i>
+        </div>
+        <div class="page-title-section">
+          <h1 class="page-title">Gestion des Orders de Chargements</h1>
+          <p class="page-subtitle badges-row" *ngIf="projetActif || contextProjet; else chargementHeaderPlaceholder">
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.nomNavire">
+              <i class="bi bi-truck-front"></i>
+              <span class="badge-label">Navire</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.nomNavire }}</span>
+            </span>
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.port">
+              <i class="bi bi-geo-alt"></i>
+              <span class="badge-label">Port</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.port }}</span>
+            </span>
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.nomProduit">
+              <i class="bi bi-box"></i>
+              <span class="badge-label">Produit</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.nomProduit }}</span>
+            </span>
+            <span class="info-badge" *ngIf="societesList.length">
+              <i class="bi bi-building"></i>
+              <span class="badge-label">Sociétés :</span>
+              <span class="badge-value">{{ societesList.join(', ') }}</span>
+            </span>
+          </p>
+          <ng-template #chargementHeaderPlaceholder>
+            <p class="page-subtitle">Vue globale</p>
+          </ng-template>
+        </div>
+      </div>
+      <div class="page-actions">
+        <button 
+          class="action-button add-btn" 
+          (click)="openAddDialog()"
+          [disabled]="!isProjetActif"
+          [title]="!isProjetActif ? 'Ce projet n\'est pas actif' : 'Ajouter un Order de chargement'"
+        >
+          <i class="bi bi-plus-circle"></i>
+          <span>Ajouter un Order de chargement</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-section">
+      <div class="filter-buttons">
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'all'"
+          (click)="setFilter('all')"
+        >
+          <i class="bi bi-grid-fill"></i>
+          <span>Tous</span>
+          <span class="badge">{{ chargements.length }}</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'date'"
+          (click)="setFilter('date')"
+        >
+          <i class="bi bi-calendar-check"></i>
+          <span>Par Date</span>
+          <span class="badge" *ngIf="getFilterCount('date') > 0">{{ getFilterCount('date') }}</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'societeP'"
+          (click)="setFilter('societeP')"
+        >
+          <i class="bi bi-buildings"></i>
+          <span>Par Société</span>
+          <span class="badge" *ngIf="getFilterCount('societeP') > 0">{{ getFilterCount('societeP') }}</span>
+        </button>
+      </div>
+
+      <!-- Date Filter -->
+      <div *ngIf="activeFilter === 'date'" class="filter-details" style="margin-top: 16px; padding: 16px; background: #dbeafe; border-radius: 12px; border-left: 4px solid #3b82f6;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
+          <i class="bi bi-calendar-event"></i> Sélectionner une plage de dates
+        </label>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+              Date début
+            </label>
+            <input 
+              type="date" 
+              [(ngModel)]="dateDebut" 
+              (change)="applyFilter()"
+              [max]="today"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #93c5fd; border-radius: 8px; font-size: 14px;"
+            />
+          </div>
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+              Date fin
+            </label>
+            <input 
+              type="date" 
+              [(ngModel)]="dateFin" 
+              (change)="applyFilter()"
+              [max]="today"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #93c5fd; border-radius: 8px; font-size: 14px;"
+            />
+          </div>
+        </div>
+        <div *ngIf="dateDebut || dateFin" style="margin-top: 12px; padding: 12px; background: #eff6ff; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+          <i class="bi bi-info-circle-fill" style="color: #3b82f6; font-size: 16px; flex-shrink: 0;"></i>
+          <div style="font-size: 13px; color: #1e40af; line-height: 1.4;">
+            <strong>Journée de travail :</strong> Les chargements incluent ceux effectués de <strong>7h00</strong> le matin jusqu'à <strong>6h00</strong> le lendemain
+            <span *ngIf="dateDebut && dateFin">, du <strong>{{ dateDebut }}</strong> au <strong>{{ dateFin }}</strong></span>
+            <span *ngIf="dateDebut && !dateFin">, à partir du <strong>{{ dateDebut }}</strong></span>
+            <span *ngIf="!dateDebut && dateFin">, jusqu'au <strong>{{ dateFin }}</strong></span>
+          </div>
+        </div>
+        <button 
+          *ngIf="dateDebut || dateFin"
+          class="btn btn-link" 
+          style="margin-top: 8px; color: #1d4ed8;" 
+          (click)="clearFilter('date')">
+          <i class="bi bi-x-circle"></i> Effacer
+        </button>
+      </div>
+
+      <!-- Société Projet Filter -->
+      <div *ngIf="activeFilter === 'societeP'" class="filter-details" style="margin-top: 16px; padding: 16px; background: #f1f5f9; border-radius: 12px; border-left: 4px solid #64748b;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
+          <i class="bi bi-buildings"></i> Sélectionner une Société
+        </label>
+        <select 
+          [(ngModel)]="selectedSocieteP" 
+          (change)="applyFilter()"
+          style="width: 100%; max-width: 400px; padding: 10px 14px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: white;">
+          <option [ngValue]="null">-- Toutes les sociétés projet --</option>
+          <option *ngFor="let s of societesList" [ngValue]="s">
+            {{ s }}
+          </option>
+        </select>
+        <button class="btn btn-link" style="margin-left: 8px; color: #334155;" (click)="clearFilter('societeP')">
+          Effacer
+        </button>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Rechercher par matricule camion ou chauffeur..." 
+          [(ngModel)]="chargementFilter" 
+          (input)="applyFilter()"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredChargements.length }} résultat(s)</span>
+        <div class="page-size-selector">
+          <span>Afficher</span>
+          <select [(ngModel)]="pageSize" (change)="changePageSize(pageSize)" class="page-size-select">
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+          <span>lignes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+      <table class="modern-table">
+        <thead>
+          <tr>
+            <th class="sortable" (click)="sortData('id')">
+              <div class="th-content">
+                <span>ID</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'id' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'id' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'id'
+                }"></i>
+              </div>
+            </th>
+            <th class="sortable" (click)="sortData('dateChargement')">
+              <div class="th-content">
+                <span>Date</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'dateChargement' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'dateChargement' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'dateChargement'
+                }"></i>
+              </div>
+            </th>
+
+            <th>
+              <div class="th-content">
+                <span>Société</span>
+              </div>
+            </th>
+            <th>Matricule Camion</th>
+                        <th class="sortable" (click)="sortData('societe')">
+              <div class="th-content">
+                <span>Transporteur</span>
+                <i class="bi" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'societe' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'societe' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'societe'
+                }"></i>
+              </div>
+            </th>
+            <th>Chauffeur</th>
+            <th class="actions-header">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let chg of paginatedChargements" class="table-row">
+            <td>{{ chg.id }}</td>
+            <td>{{ formatDateTime(chg.dateChargement) }}</td>
+
+            <td >{{ chg.societeP || '-' }}</td>
+            <td>
+              {{ getCamionInfo(chg.camionId!) }}
+            </td>
+                        <td >{{ chg.societe }}</td>
+            <td>
+              {{ getChauffeurInfo(chg.chauffeurId!) }}
+            </td>
+            <td class="actions-cell">
+              <div class="action-buttons">
+                <button 
+                  class="action-btn print-btn" 
+                  (click)="printThermalReceipt(chg)" 
+                  title="Imprimer facture thermique"
+                >
+                  <i class="bi bi-printer"></i>
+                </button>
+                <button 
+                  class="action-btn dechargement-btn" 
+                  (click)="openDechargementForm(chg)" 
+                  [disabled]="!canAddData()" 
+                  [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Créer un Bon de chargement'"
+                >
+                  <i class="bi bi-box-arrow-down"></i>
+                </button>
+                <button 
+                  class="action-btn edit-btn" 
+                  (click)="openEditDialog(chg)" 
+                  [disabled]="!canAddData()" 
+                  [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Modifier'"
+                >
+                  <i class="bi bi-pencil-square"></i>
+                </button>
+                <button 
+                  class="action-btn delete-btn" 
+                  (click)="openDeleteDialog(chg)" 
+                  [disabled]="!canAddData()" 
+                  [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Supprimer'"
+                >
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="paginatedChargements.length === 0" class="no-data-row">
+            <td colspan="6">
+              <div class="no-data">
+                <i class="bi bi-inbox"></i>
+                <p>Aucun chargement trouvé</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="filteredChargements.length > 0">
+      <div class="pagination-info">
+        Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredChargements.length) }} sur {{ filteredChargements.length }} chargement(s)
+      </div>
+      <div class="pagination-controls">
+        <button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        <button 
+          *ngFor="let page of [].constructor(totalPages); let i = index" 
+          class="page-btn" 
+          [class.active]="i + 1 === currentPage"
+          (click)="goToPage(i + 1)"
+        >
+          {{ i + 1 }}
+        </button>
+        <button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Dialog modal -->
+    <div class="dialog-backdrop" *ngIf="showAddDialog" (click)="closeDialog()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()" style="max-width: 550px; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+          <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="bi bi-box-seam" style="font-size: 24px; color: white;"></i>
+          </div>
+          <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">{{ editMode ? 'Modifier le order de chargement' : 'Nouveau order de chargement' }}</h3>
+        </div>
+        
+        <div *ngIf="error" style="background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; border-left: 4px solid #dc2626;">
+          <i class="bi bi-exclamation-triangle-fill" style="margin-right: 8px;"></i>{{ error }}
+        </div>
+
+        <!-- Informations du projet (lecture seule) -->
+        <div class="project-info-panel" style="background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 2px solid #667eea30;">
+          <div class="badges-row">
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.nomNavire">
+              <i class="bi bi-truck-front"></i>
+              <span class="badge-label">Navire</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.nomNavire }}</span>
+            </span>
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.port">
+              <i class="bi bi-geo-alt"></i>
+              <span class="badge-label">Port</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.port }}</span>
+            </span>
+            <span class="info-badge" *ngIf="(contextProjet || projetActif)?.nomProduit">
+              <i class="bi bi-box"></i>
+              <span class="badge-label">Produit</span>
+              <span class="badge-value">{{ (contextProjet || projetActif)?.nomProduit }}</span>
+            </span>
+            <span class="info-badge" *ngIf="societesList.length">
+              <i class="bi bi-building"></i>
+              <span class="badge-label">Sociétés</span>
+              <span class="badge-value">{{ societesList.join(', ') }}</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Société Projet (societeP) + Transporteur (societe) -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; font-size: 13px;">
+              <i class="bi bi-buildings"></i> Société
+            </label>
+            <select [(ngModel)]="dialogChargement.societeP" style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: white;">
+              <option [ngValue]="null">-- Aucune --</option>
+              <option *ngFor="let s of societesList" [ngValue]="s">{{ s }}</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; font-size: 13px;">
+              <i class="bi bi-building"></i> Transporteur *
+            </label>
+            <div class="autocomplete-container" style="position: relative;">
+              <input 
+                [(ngModel)]="societeSearchInput" 
+                (input)="onSocieteSearch(); dialogChargement.societe = societeSearchInput"
+                (focus)="onSocieteSearch()"
+                placeholder="Entrer ou sélectionner un Transporteur" 
+                style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                autocomplete="off"
+              />
+              <div *ngIf="showSocieteDropdown && filteredSocietes.length > 0" 
+                   style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-height: 200px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+                <div *ngFor="let soc of filteredSocietes" 
+                     (click)="selectSociete(soc)"
+                     style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9;"
+                     onmouseover="this.style.background='#f8fafc'" 
+                     onmouseout="this.style.background='white'">
+                  {{ soc }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Camion -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; font-size: 13px;">
+            <i class="bi bi-truck"></i> Camion *
+          </label>
+          <div class="autocomplete-container" style="position: relative;">
+            <input 
+              [(ngModel)]="camionSearchInput" 
+              (input)="onCamionSearch()"
+              (focus)="onCamionSearch()"
+              placeholder="Rechercher un camion..." 
+              style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+              autocomplete="off"
+            />
+            <div *ngIf="showCamionDropdown && filteredCamions.length > 0" 
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-height: 200px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+              <div *ngFor="let cam of filteredCamions" 
+                   (click)="selectCamion(cam)"
+                   style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9;"
+                   onmouseover="this.style.background='#f8fafc'" 
+                   onmouseout="this.style.background='white'">
+                {{ cam.matricule }} 
+              </div>
+            </div>
+            <div *ngIf="showCamionDropdown && filteredCamions.length === 0 && camionSearchInput.trim()" 
+                 (mousedown)="$event.preventDefault()"
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px;">
+              <div style="padding: 12px; text-align: center;">
+                <div style="color: #64748b; font-size: 13px; margin-bottom: 8px;">
+                  <i class="bi bi-info-circle"></i> Aucun camion trouvé
+                </div>
+                <button 
+                  type="button"
+                  (mousedown)="createAndSelectCamion()" 
+                  [disabled]="isCreatingCamion"
+                  style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;"
+                  onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px rgba(16, 185, 129, 0.3)'" 
+                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                  <i class="bi bi-plus-circle"></i> {{ isCreatingCamion ? 'Création...' : 'Créer "' + camionSearchInput + '"' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chauffeur -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; font-size: 13px;">
+            <i class="bi bi-person-badge"></i> Chauffeur *
+          </label>
+          <div class="autocomplete-container" style="position: relative;">
+            <input 
+              [(ngModel)]="chauffeurSearchInput" 
+              (input)="onChauffeurSearch()"
+              (focus)="onChauffeurSearch()"
+              placeholder="Rechercher un chauffeur..." 
+              style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+              autocomplete="off"
+            />
+            <div *ngIf="showChauffeurDropdown && filteredChauffeurs.length > 0" 
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-height: 200px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+              <div *ngFor="let chauf of filteredChauffeurs" 
+                   (click)="selectChauffeur(chauf)"
+                   style="padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9;"
+                   onmouseover="this.style.background='#f8fafc'" 
+                   onmouseout="this.style.background='white'">
+                {{ chauf.nom }} ({{ chauf.numCin }})
+              </div>
+            </div>
+            <div *ngIf="showChauffeurDropdown && filteredChauffeurs.length === 0 && chauffeurSearchInput.trim()" 
+                 (mousedown)="$event.preventDefault()"
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px;">
+              <div style="padding: 12px;">
+                <div style="color: #64748b; font-size: 13px; margin-bottom: 8px; text-align: center;">
+                  <i class="bi bi-info-circle"></i> Aucun chauffeur trouvé
+                </div>
+                <div style="background: #f8fafc; padding: 12px; border-radius: 6px;">
+                  <label style="display: block; margin-bottom: 6px; font-size: 12px; font-weight: 500; color: #4a5568;">Nom complet</label>
+                  <input 
+                    [(ngModel)]="chauffeurSearchInput"
+                    (mousedown)="$event.stopPropagation()"
+                    placeholder="Nom complet"
+                    style="background: white; width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;"
+                  />
+                  <label style="display: block; margin-top: 10px; margin-bottom: 6px; font-size: 12px; font-weight: 500; color: #4a5568;">CIN</label>
+                  <input 
+                    [(ngModel)]="chauffeurCinInput"
+                    (mousedown)="$event.stopPropagation()"
+                    placeholder="Numéro CIN"
+                    style="background: white; width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px;"
+                  />
+                </div>
+                <button 
+                  type="button"
+                  (mousedown)="createAndSelectChauffeur(chauffeurSearchInput, chauffeurCinInput)" 
+                  [disabled]="isCreatingChauffeur || !chauffeurSearchInput.trim() || !chauffeurCinInput.trim()"
+                  style="width: 100%; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; margin-top: 12px;"
+                  onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 6px rgba(16, 185, 129, 0.3)'" 
+                  onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                  <i class="bi bi-plus-circle"></i> {{ isCreatingChauffeur ? 'Création...' : 'Créer ce chauffeur' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button (click)="closeDialog()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #64748b; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            Annuler
+          </button>
+          <button (click)="saveChargement()" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            {{ editMode ? 'Modifier' : 'Créer' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dialog Déchargement -->
+    <div class="dialog-backdrop" *ngIf="showDechargementDialog" (click)="closeDechargementDialog()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()" style="max-width: 550px; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+          <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="bi bi-box-arrow-down" style="font-size: 24px; color: white;"></i>
+          </div>
+          <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">Créer un Bon de chargement</h3>
+        </div>
+        
+        <div *ngIf="error" style="background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; border-left: 4px solid #dc2626;">
+          <i class="bi bi-exclamation-triangle-fill" style="margin-right: 8px;"></i>{{ error }}
+        </div>
+
+        <!-- Informations du chargement (readonly) -->
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #e2e8f0;">
+          <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-info-circle-fill"></i> Informations du Order de chargement
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Date</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ formatDateTime(selectedChargementForDechargement?.dateChargement) }}</div>
+            </div>
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Société</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ selectedChargementForDechargement?.societeP }}</div>
+            </div>
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Navire</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ selectedChargementForDechargement?.navire || selectedChargementForDechargement?.nomProjet }}</div>
+            </div>
+            <div>
+              <div style="color: #64748b; margin-bottom: 4px;">Produit</div>
+              <div style="font-weight: 600; color: #1e293b;">{{ selectedChargementForDechargement?.produit }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Informations du déchargement -->
+        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-file-text"></i> Informations du Bon de chargement
+          </div>
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">Numéro de ticket *</label>
+          <input [(ngModel)]="dialogDechargement.numTicket" placeholder="Entrer le numéro de ticket" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+          
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #4a5568; font-size: 13px;">Numéro de bon de livraison</label>
+          <input [(ngModel)]="dialogDechargement.numBonLivraison" placeholder="Entrer le numéro de bon" style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+          
+          <label style="display: block; margin-top: 12px; font-weight: 600; color: #4a5568; font-size: 13px;">
+            <i class="bi bi-building"></i> Société *
+          </label>
+          <select 
+            [(ngModel)]="dialogDechargement.societeP" 
+            style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; cursor: pointer;"
+            required>
+            <option [ngValue]="null" disabled>-- Sélectionner une société --</option>
+            <option *ngFor="let societe of societesList" [value]="societe">
+              {{ societe }}
+            </option>
+          </select>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+            <div>
+              <label style="display: block; font-weight: 500; color: #4a5568; font-size: 13px;">Poids Tare </label>
+              <input 
+                [(ngModel)]="dialogDechargement.poidCamionVide" 
+                (ngModelChange)="onWeightChange('poidCamionVide', $event)"
+                type="text" inputmode="numeric" step="1" min="0" placeholder="0" 
+                style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+            </div>
+            <div>
+              <label style="display: block; font-weight: 500; color: #4a5568; font-size: 13px;">Poids Brut </label>
+              <input 
+                [(ngModel)]="dialogDechargement.poidComplet" 
+                (ngModelChange)="onWeightChange('poidComplet', $event)"
+                type="text" inputmode="numeric" step="1" min="0" placeholder="0" 
+                style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;" />
+            </div>
+          </div>
+
+          <div *ngIf="!weightsAreIntegers || !isBrutGreaterThanTar" style="margin-top: 8px; font-size: 12px;">
+            <div *ngIf="!weightsAreIntegers" style="color: #b91c1c;">
+              <i class="bi bi-x-circle"></i> Les poids doivent être des entiers (sans décimales).
+            </div>
+            <div *ngIf="!isBrutGreaterThanTar" style="color: #b45309;">
+              <i class="bi bi-exclamation-triangle"></i> Le poids brut doit être strictement supérieur au poids tare.
+            </div>
+          </div>
+
+          <label style="display: block; margin-top: 12px; font-weight: 500; color: #64748b; font-size: 13px;">
+            <i class="bi bi-calculator"></i> Poids net (calculé automatiquement)
+          </label>
+          <input 
+            [value]="calculatePoids()" 
+            type="number" 
+            disabled 
+            style="background: #f1f5f9; color: #667eea; font-weight: 600; width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; cursor: not-allowed;" 
+          />
+
+          <!-- Reste disponible du projet -->
+          <div *ngIf="projetActif || contextProjet" style="margin-top: 16px; padding: 12px; background: white; border-radius: 8px; border: 2px solid #e2e8f0; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">
+                <i class="bi bi-box-seam"></i> Quantité totale du projet:
+              </span>
+              <span style="font-weight: 600; color: #10b981;">
+                {{ (projetActif || contextProjet).quantiteTotale || 0 | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">
+                <i class="bi bi-truck-flatbed"></i> Déjà livré:
+              </span>
+              <span style="font-weight: 600; color: #f59e0b;">
+                {{ ((projetActif || contextProjet).quantiteTotale || 0) - getResteProjet() | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+              <span style="color: #64748b; font-weight: 600;">
+                <i class="bi bi-calculator-fill"></i> Reste disponible:
+              </span>
+              <span style="font-weight: 700; font-size: 14px;" 
+                    [style.color]="getResteProjet() > 0 ? '#10b981' : '#ef4444'">
+                {{ getResteProjet() | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div *ngIf="dialogDechargement.poidComplet && dialogDechargement.poidCamionVide" 
+                 style="margin-top: 8px; padding: 8px; background: #fef3c7; border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #92400e; font-size: 11px;">
+                  <i class="bi bi-exclamation-triangle-fill"></i> Après cette opération:
+                </span>
+                <span style="font-weight: 700; font-size: 13px;"
+                      [style.color]="(getResteProjet() - calculatePoids()) >= 0 ? '#15803d' : '#dc2626'">
+                  {{ getResteProjet() - calculatePoids() | number:'1.0-0' }} kg
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Type de destination -->
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            <i class="bi bi-geo-alt"></i> Destination
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <button 
+              type="button"
+              [style.background]="dialogDechargement._type === 'client' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+              [style.color]="dialogDechargement._type === 'client' ? 'white' : '#64748b'"
+              [style.border]="dialogDechargement._type === 'client' ? 'none' : '2px solid #e2e8f0'"
+              style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+              (click)="dialogDechargement._type = 'client'; dialogDechargement.depotId = null; depotSearchInput = '';"
+            >
+              <i class="bi bi-person-fill" style="font-size: 18px;"></i> Client
+            </button>
+            <button 
+              type="button"
+              [style.background]="dialogDechargement._type === 'depot' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+              [style.color]="dialogDechargement._type === 'depot' ? 'white' : '#64748b'"
+              [style.border]="dialogDechargement._type === 'depot' ? 'none' : '2px solid #e2e8f0'"
+              style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+              (click)="dialogDechargement._type = 'depot'; dialogDechargement.clientId = null; clientSearchInput = '';"
+            >
+              <i class="bi bi-building" style="font-size: 18px;"></i> Dépôt
+            </button>
+          </div>
+        </div>
+
+        <!-- Client -->
+        <div *ngIf="dialogDechargement._type === 'client'" style="background: #f0fdf4; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #86efac;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #15803d; font-size: 13px;">
+            <i class="bi bi-person-check-fill"></i> Client *
+          </label>
+          <div style="position: relative;">
+            <input 
+              [(ngModel)]="clientSearchInput" 
+              (input)="onClientSearchInput()"
+              (focus)="onClientSearchInput()"
+              placeholder="Rechercher un client par nom ou numéro..." 
+              style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #86efac; border-radius: 8px; font-size: 14px;"
+              autocomplete="off"
+            />
+            <div *ngIf="showClientDropdown && filteredClientsSearch.length > 0" 
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #86efac; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; max-height: 200px; overflow-y: auto;">
+              <div *ngFor="let cl of filteredClientsSearch" 
+                   (click)="selectClient(cl)"
+                   style="padding: 12px; cursor: pointer; border-bottom: 1px solid #f0fdf4; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;"
+                   onmouseover="this.style.background='#f0fdf4'"
+                   onmouseout="this.style.background='white'">
+                <div style="flex: 1;">
+                  <div style="font-weight: 500; color: #1e293b;">{{ cl.nom }}</div>
+                  <div style="font-size: 12px; color: #64748b;">N°: {{ cl.numero || 'N/A' }}</div>
+                </div>
+                <i class="bi bi-arrow-return-left" style="color: #86efac;"></i>
+              </div>
+            </div>
+            <div *ngIf="showClientDropdown && filteredClientsSearch.length === 0 && clientSearchInput.trim()" 
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #86efac; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; padding: 16px; text-align: center; color: #64748b;">
+              <i class="bi bi-search"></i> Aucun client trouvé
+            </div>
+          </div>
+          
+          <div *ngIf="dialogDechargement.clientId" style="margin-top: 12px; padding: 12px; background: white; border-radius: 8px; font-size: 12px;">
+            <!-- Autorisation code selector (if client has codes) -->
+            <div *ngIf="dialogDechargement._availableAutorisation && dialogDechargement._availableAutorisation.length > 0" style="margin-bottom: 12px; display:flex; gap:12px; align-items:center;">
+              <div style="flex:1">
+                <label style="display:block; font-size:12px; color:#64748b; margin-bottom:6px;">Code autorisation</label>
+                <select [(ngModel)]="dialogDechargement.autorisationCode" style="width:100%; padding:8px 10px; border-radius:8px; border:1px solid #e2e8f0;">
+                  <option *ngFor="let a of dialogDechargement._availableAutorisation" [value]="a.code">{{ a.code || 'DEFAULT' }}</option>
+                </select>
+              </div>
+              <div style="width:160px; text-align:right;">
+                <div style="font-size:12px; color:#64748b;">Quantité code</div>
+                <div style="font-weight:700; color:#10b981;">{{ getQuantiteAutoriseeForCode(dialogDechargement.clientId, dialogDechargement.autorisationCode) | number:'1.0-0' }} kg</div>
+              </div>
+            </div>
+
+            <!-- Show authorized quantity for selected code when available, otherwise show overall client total -->
+            <div *ngIf="dialogDechargement._availableAutorisation && dialogDechargement._availableAutorisation.length > 0; else overallTotalAuth" style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">Quantité autorisée (code sélectionné):</span>
+              <span style="font-weight: 600; color: #10b981;">{{ getQuantiteAutoriseeForCode(dialogDechargement.clientId, dialogDechargement.autorisationCode) | number:'1.0-0' }} kg</span>
+            </div>
+            <ng-template #overallTotalAuth>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span style="color: #64748b;">Quantité autorisée (total client):</span>
+                <span style="font-weight: 600; color: #10b981;">{{ getQuantiteAutorisee(dialogDechargement.clientId) | number:'1.0-0' }} kg</span>
+              </div>
+            </ng-template>
+
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">Déjà livré (code sélectionné):</span>
+              <span style="font-weight: 600; color: #f59e0b;">{{ getTotalLivreClientForCode(dialogDechargement.clientId, dialogDechargement.autorisationCode) | number:'1.0-0' }} kg</span>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+              <span style="color: #64748b;">Reste disponible (code sélectionné):</span>
+              <span style="font-weight: 700;" [style.color]="getResteClientForCode(dialogDechargement.clientId, dialogDechargement.autorisationCode) > 0 ? '#10b981' : '#ef4444'">
+                {{ getResteClientForCode(dialogDechargement.clientId, dialogDechargement.autorisationCode) | number:'1.0-0' }} kg
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dépôt -->
+        <div *ngIf="dialogDechargement._type === 'depot'" style="background: #fef3c7; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #fcd34d;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #92400e; font-size: 13px;">
+            <i class="bi bi-building"></i> Dépôt *
+          </label>
+          <div style="position: relative;">
+            <input 
+              [(ngModel)]="depotSearchInput" 
+              (input)="onDepotSearchInput()"
+              (focus)="onDepotSearchInput()"
+              placeholder="Rechercher un dépôt par nom..." 
+              style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #fcd34d; border-radius: 8px; font-size: 14px;"
+              autocomplete="off"
+            />
+            <div *ngIf="showDepotDropdown && filteredDepotsSearch.length > 0" 
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #fcd34d; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; max-height: 200px; overflow-y: auto;">
+              <div *ngFor="let dep of filteredDepotsSearch" 
+                   (click)="selectDepot(dep)"
+                   style="padding: 12px; cursor: pointer; border-bottom: 1px solid #fef3c7; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;"
+                   onmouseover="this.style.background='#fef3c7'"
+                   onmouseout="this.style.background='white'">
+                <div style="flex: 1;">
+                  <div style="font-weight: 500; color: #1e293b;">{{ dep.nom }}</div>
+                </div>
+                <i class="bi bi-arrow-return-left" style="color: #fcd34d;"></i>
+              </div>
+            </div>
+            <div *ngIf="showDepotDropdown && filteredDepotsSearch.length === 0 && depotSearchInput.trim()" 
+                 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #fcd34d; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; padding: 16px; text-align: center; color: #64748b;">
+              <i class="bi bi-search"></i> Aucun dépôt trouvé
+            </div>
+          </div>
+          
+          <!-- Détails du dépôt sélectionné -->
+          <div *ngIf="dialogDechargement.depotId" style="margin-top: 12px; padding: 12px; background: white; border-radius: 8px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">Quantité autorisée:</span>
+              <span style="font-weight: 600; color: #f59e0b;">{{ getQuantiteAutoriseeDepot(dialogDechargement.depotId) }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">Déjà livré:</span>
+              <span style="font-weight: 600; color: #f97316;">{{ getTotalLivreDepot(dialogDechargement.depotId) }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+              <span style="color: #64748b;">Reste disponible:</span>
+              <span style="font-weight: 700;" [style.color]="getResteColor(getResteDepot(dialogDechargement.depotId), getQuantiteAutoriseeDepot(dialogDechargement.depotId))">
+                {{ getResteDepot(dialogDechargement.depotId) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button (click)="closeDechargementDialog()" style="flex: 1; padding: 12px; background: #f1f5f9; color: #64748b; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            Annuler
+          </button>
+          <button (click)="saveDechargement()" [disabled]="!canSubmitDechargement" [style.opacity]="canSubmitDechargement ? 1 : 0.6" style="flex: 1; padding: 12px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            Créer le déchargement
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dialog Confirmation Suppression -->
+    <div class="dialog-backdrop" *ngIf="showDeleteDialog" (click)="closeDeleteDialog()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()" style="max-width: 500px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+          <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size: 24px; color: white;"></i>
+          </div>
+          <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">Confirmer la suppression</h3>
+        </div>
+        
+        <div style="background: #fef2f2; padding: 16px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ef4444;">
+          <p style="margin: 0; color: #991b1b; font-size: 14px; line-height: 1.6;">
+            <strong>Attention :</strong> Cette action est irréversible. Êtes-vous sûr de vouloir supprimer ce chargement ?
+          </p>
+        </div>
+
+        <!-- Informations du chargement -->
+        <div *ngIf="chargementToDelete" style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 2px solid #e2e8f0;">
+          <div style="font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+            Détails du chargement
+          </div>
+          <div style="display: grid; gap: 8px; font-size: 13px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">ID :</span>
+              <strong style="color: #1e293b;">{{ chargementToDelete.id }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Date :</span>
+              <strong style="color: #1e293b;">{{ formatDateTime(chargementToDelete.dateChargement) }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Société :</span>
+              <strong style="color: #1e293b;">{{ chargementToDelete.societe }}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #64748b;">Matricule Camion :</span>
+              <strong style="color: #1e293b;">{{ getCamionInfo(chargementToDelete.camionId!) }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div style="display: flex; gap: 12px; margin-top: 24px;">
+          <button 
+            (click)="closeDeleteDialog()" 
+            style="flex: 1; padding: 12px; background: #f1f5f9; color: #64748b; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;"
+            onmouseover="this.style.background='#e2e8f0'"
+            onmouseout="this.style.background='#f1f5f9'"
+          >
+            <i class="bi bi-x-circle" style="margin-right: 6px;"></i>
+            Annuler
+          </button>
+          <button 
+            (click)="confirmDelete()" 
+            style="flex: 1; padding: 12px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); transition: all 0.2s ease;"
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(239, 68, 68, 0.4)'"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(239, 68, 68, 0.3)'"
+          >
+            <i class="bi bi-trash-fill" style="margin-right: 6px;"></i>
+            Supprimer définitivement
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de confirmation de dépassement -->
+    <div class="modal-overlay" *ngIf="showDepassementModal" (click)="cancelDepassement()" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+      <div class="modal-container" (click)="$event.stopPropagation()" style="max-width: 500px; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); z-index: 10000;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; padding: 24px 32px; border-radius: 16px 16px 0 0;">
+          <i class="bi bi-exclamation-triangle" style="font-size: 24px; margin-right: 12px;"></i>
+          <h3 style="margin: 0; font-size: 20px; font-weight: 600;">Dépassement de quantité autorisée</h3>
+        </div>
+        
+        <div class="modal-body" style="padding: 32px; text-align: center;">
+          <div style="margin-bottom: 24px;">
+            <div style="width: 80px; height: 80px; margin: 0 auto 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);">
+              <i class="bi bi-exclamation-triangle" style="font-size: 40px; color: #f59e0b;"></i>
+            </div>
+          </div>
+          
+          <p style="font-size: 16px; color: #1f2937; margin-bottom: 16px; line-height: 1.6;">
+            Vous êtes sur le point de <strong>dépasser la quantité autorisée</strong> pour ce client.
+          </p>
+          
+          <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: 12px; margin: 20px 0; border: 2px solid #fbbf24;">
+            <div style="font-size: 14px; color: #92400e; margin-bottom: 8px; font-weight: 500;">
+              Quantité de dépassement
+            </div>
+            <div style="font-size: 32px; font-weight: 700; color: #f59e0b;">
+              {{ depassementQuantite | number:'1.0-0' }} <span style="font-size: 18px;">kg</span>
+            </div>
+          </div>
+          
+          <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+            Êtes-vous sûr de vouloir continuer cette opération ?
+          </p>
+        </div>
+        
+        <div class="modal-footer" style="padding: 20px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 12px; justify-content: flex-end;">
+          <button 
+            type="button" 
+            class="btn-secondary" 
+            (click)="cancelDepassement()"
+            style="padding: 10px 24px; border-radius: 8px; font-weight: 500; background: white; color: #6b7280; border: 1px solid #d1d5db; cursor: pointer; transition: all 0.2s;">
+            <i class="bi bi-x-circle" style="margin-right: 8px;"></i>
+            Annuler
+          </button>
+          <button 
+            type="button" 
+            class="btn-primary" 
+            (click)="confirmDepassement()"
+            style="padding: 10px 24px; border-radius: 8px; font-weight: 500; background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; border: none; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+            <i class="bi bi-check-circle" style="margin-right: 8px;"></i>
+            Oui, continuer
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>

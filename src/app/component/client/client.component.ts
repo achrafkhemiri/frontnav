@@ -1,0 +1,1477 @@
+import { Component } from '@angular/core';
+import { trigger, state, style, transition, animate } from '@angular/animations';
+import { ClientControllerService } from '../../api/api/clientController.service';
+import { ProjetClientControllerService } from '../../api/api/projetClientController.service';
+import { ProjetActifService } from '../../service/projet-actif.service';
+import { ProjetControllerService } from '../../api/api/projetController.service';
+import { VoyageControllerService } from '../../api/api/voyageController.service';
+import { DechargementControllerService } from '../../api/api/dechargementController.service';
+import { ClientDTO } from '../../api/model/clientDTO';
+import { VoyageDTO } from '../../api/model/voyageDTO';
+import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
+import { NotificationService } from '../../service/notification.service';
+import { QuantiteService } from '../../service/quantite.service';
+import { HttpClient } from '@angular/common/http';
+import { Inject } from '@angular/core';
+import { BASE_PATH } from '../../api/variables';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmCodeDialogComponent } from '../../shared/confirm-code-dialog.component';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+
+@Component({
+  selector: 'app-client',
+  templateUrl: './client.component.html',
+  styleUrls: ['./client.component.css'],
+  animations: [
+    trigger('fadeIn', [
+      transition(':enter', [
+        style({ opacity: 0 }),
+        animate('200ms ease-in', style({ opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('200ms ease-out', style({ opacity: 0 }))
+      ])
+    ]),
+    trigger('slideIn', [
+      transition(':enter', [
+        style({ transform: 'scale(0.8)', opacity: 0 }),
+        animate('300ms cubic-bezier(0.34, 1.56, 0.64, 1)', style({ transform: 'scale(1)', opacity: 1 }))
+      ]),
+      transition(':leave', [
+        animate('200ms ease-out', style({ transform: 'scale(0.8)', opacity: 0 }))
+      ])
+    ])
+  ]
+})
+export class ClientComponent {
+  clients: ClientDTO[] = [];
+  filteredClients: ClientDTO[] = [];
+  paginatedClients: ClientDTO[] = [];
+  // Global active project (could be different from the project currently visited)
+  projetActifId: number | null = null;
+  projetActif: any = null;
+  // Context project (projet consulté via parametre) stored in sessionStorage
+  contextProjetId: number | null = null; 
+  contextProjet: any = null;
+  breadcrumbItems: BreadcrumbItem[] = []; 
+  selectedClient: ClientDTO | null = null;
+  newClient: ClientDTO = { nom: '', numero: '' };
+  editMode: boolean = false;
+  error: string = '';
+  isSidebarOpen: boolean = true;
+  showAddClient: boolean = false;
+  clientFilter: string = '';
+  dialogClient: ClientDTO = { nom: '', numero: '', adresse: '', mf: '' };
+  
+  // Pour l'autocomplétion type Select2
+  allClients: ClientDTO[] = []; // Tous les clients (toutes les BDD)
+  filteredSuggestions: ClientDTO[] = [];
+  showSuggestions: boolean = false;
+  selectedExistingClient: ClientDTO | null = null;
+  
+  // Voyages pour calculer le reste
+  voyages: VoyageDTO[] = [];
+  dechargements: any[] = [];
+  
+  // Alerte temporaire
+  showAlert: boolean = false;
+  alertMessage: string = '';
+  alertType: 'success' | 'danger' | 'warning' | 'info' = 'info';
+  
+  // Modal de quantité
+  showQuantiteModal: boolean = false;
+  quantiteAutorisee: number = 0;
+  pendingClientId: number | null = null;
+  // Add-mode autorisation state (for the add client -> association modal)
+  addAutorisationMode: boolean = false;
+  addingAutorisation: Array<{ code?: string; quantite?: number }> = [];
+  
+  // Modal de modification de quantité
+  showEditQuantiteModal: boolean = false;
+  editingClient: any = null;
+  newQuantiteAutorisee: number = 0;
+  // Autorisation editing state
+  editAutorisationMode: boolean = false;
+  editingAutorisation: Array<{ code?: string; quantite?: number }> = [];
+  
+  // Pagination
+  currentPage: number = 1;
+  pageSize: number = 5;
+  totalPages: number = 1;
+  pageSizes: number[] = [5, 10, 20, 50];
+  
+  // Sorting
+  sortColumn: string = '';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  
+  // Date Filter
+  dateFilterActive: boolean = false;
+  dateDebut: string | null = null;
+  dateFin: string | null = null;
+  // Date max pour le filtre (aujourd'hui)
+  today: string = '';
+  
+  // Expose Math to template
+  Math = Math;
+
+  constructor(
+    private clientService: ClientControllerService,
+    private projetClientService: ProjetClientControllerService,
+    private projetActifService: ProjetActifService,
+    private projetService: ProjetControllerService,
+    private voyageService: VoyageControllerService,
+    private notificationService: NotificationService,
+    private quantiteService: QuantiteService,
+  private dechargementService: DechargementControllerService,
+    private http: HttpClient,
+    private dialog: MatDialog,
+    @Inject(BASE_PATH) private basePath: string
+  ) {
+    // 🔥 Écouter les changements du projet actif
+    this.projetActifService.projetActif$.subscribe(projet => {
+      console.log('📡 Notification reçue du service - Nouveau projet:', projet);
+      
+      if (projet && projet.id) {
+        const previousId = this.projetActifId;
+        this.projetActifId = projet.id;
+        this.projetActif = projet;
+        
+        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        if (!previousId || previousId !== projet.id) {
+          console.log('🔄 Rechargement des clients - previousId:', previousId, 'newId:', projet.id);
+          // Attendre un peu pour que la navigation se termine
+          setTimeout(() => {
+            this.reloadData();
+          }, 50);
+        }
+      }
+    });
+
+    // Écouter les rafraîchissements globaux (utilisé par d'autres composants via notificationService.rafraichir())
+    this.notificationService.onRefresh().subscribe(() => {
+      console.log('🔔 [Client] notificationService rafraîchir reçu - rechargement des données clients et déchargements');
+      // Recharger uniquement ce qui est nécessaire pour mettre à jour les quantités par code
+      this.loadDechargements();
+      this.loadClients();
+      this.loadVoyages();
+    });
+    
+    this.initializeProjetContext();
+    // Initialiser la date du jour
+    this.today = this.getTodayString();
+  }
+
+  initializeProjetContext() {
+    // 1. Global active project
+    const globalProjet = this.projetActifService.getProjetActif();
+    if (globalProjet && globalProjet.id) {
+      this.projetActifId = globalProjet.id;
+      this.projetActif = globalProjet;
+    }
+
+    // 2. Context project (visited project via /projet/:id/parametre then navigation)
+    const contextId = window.sessionStorage.getItem('projetActifId');
+    if (contextId) {
+      this.contextProjetId = Number(contextId);
+      // Load context project details (can differ from global active)
+      this.loadProjetDetails(this.contextProjetId, true);
+    }
+
+    this.loadAllClients(); // Charger tous les clients pour l'autocomplétion
+    this.loadClients();
+    this.loadVoyages(); // Charger les voyages pour calculer le reste
+    this.loadDechargements(); // Charger les déchargements pour les quantités par code
+  }
+
+  // 🔥 Méthode pour recharger toutes les données
+  reloadData() {
+    console.log('🔄 [Client] reloadData() - Projet actif:', this.projetActif?.nom, 'ID:', this.projetActifId);
+    
+    // 🔥 IMPORTANT : En mode rechargement, on utilise TOUJOURS le projet actif global
+    // Le sessionStorage n'est utilisé QUE pour la navigation contextuelle (depuis /projet/:id/parametre)
+    const currentUrl = window.location.pathname;
+    const isOnParametrePage = currentUrl.includes('/parametre');
+    
+    if (isOnParametrePage) {
+      // On est sur une page de paramètres, utiliser le contexte sessionStorage
+      const contextId = window.sessionStorage.getItem('projetActifId');
+      if (contextId) {
+        const contextIdNumber = Number(contextId);
+        console.log('📌 [Client] Page paramètre - Contexte:', contextIdNumber);
+        this.contextProjetId = contextIdNumber;
+        if (contextIdNumber !== this.projetActifId) {
+          this.loadProjetDetails(this.contextProjetId, true);
+        } else {
+          this.contextProjet = this.projetActif;
+        }
+      }
+    } else {
+      // On n'est PAS sur une page de paramètres → Mode "Vue Projet Actif"
+      // Ignorer le sessionStorage et utiliser le projet actif global
+      console.log('🏠 [Client] Mode Vue Projet Actif - Projet:', this.projetActif?.nom);
+      this.contextProjetId = null;
+      this.contextProjet = null;
+    }
+    
+  // Recharger toutes les données
+  this.loadAllClients();
+  this.loadClients();
+  this.loadVoyages();
+  this.loadDechargements();
+  this.updateBreadcrumb();
+  }
+
+  loadProjetDetails(projetId: number, isContext: boolean = false) {
+    this.projetService.getProjetById(projetId, 'body').subscribe({
+      next: async (data: any) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            if (isContext) {
+              this.contextProjet = parsed;
+              this.updateBreadcrumb();
+            } else {
+              this.projetActif = parsed;
+            }
+          } catch (e) {
+            console.error('Erreur parsing projet:', e);
+          }
+        } else {
+          if (isContext) {
+            this.contextProjet = data;
+            this.updateBreadcrumb();
+          } else {
+            this.projetActif = data;
+          }
+        }
+      },
+      error: (err: any) => {
+        console.error('Erreur chargement projet:', err);
+      }
+    });
+  }
+
+  updateBreadcrumb() {
+    const projet = this.contextProjet || this.projetActif;
+    if (projet) {
+      this.breadcrumbItems = [
+        { label: 'Projets', url: '/projet' },
+        { label: projet.nom || `Projet ${projet.id}`, url: `/projet/${projet.id}/parametre` },
+        { label: 'Paramètres', url: `/projet/${projet.id}/parametre` },
+        { label: 'Clients' }
+      ];
+    } else {
+      this.breadcrumbItems = [
+        { label: 'Clients' }
+      ];
+    }
+  }
+
+  // IMPORTANT: Cette méthode est pour FILTRER les données (garde le comportement actuel)
+  isProjetActif(): boolean {
+    // Pour filtrage on utilise le contexte si disponible, sinon global
+    return !!(this.contextProjetId || this.projetActifId);
+  }
+
+  // NOUVELLE: Cette méthode est UNIQUEMENT pour les boutons Ajouter
+  canAddData(): boolean {
+    // Si on visite un autre projet, on contrôle selon ce projet contextuel
+    if (this.contextProjet) {
+      return this.contextProjet.active === true;
+    }
+    return !!(this.projetActif && this.projetActif.active === true);
+  }
+
+  openAddDialog() {
+    this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+    this.selectedExistingClient = null;
+    this.showAddClient = true;
+    this.editMode = false;
+    this.showSuggestions = false;
+    this.filteredSuggestions = [];
+  }
+  
+  // Charger tous les clients de la base de données
+  loadAllClients() {
+    this.clientService.getAllClients('body').subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            this.allClients = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            this.allClients = [];
+          }
+        } else {
+          this.allClients = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement tous les clients:', err);
+        this.allClients = [];
+      }
+    });
+  }
+  
+  // Filtrer les suggestions lors de la saisie
+  onClientInputChange(field: 'nom' | 'numero') {
+    const searchValue = field === 'nom' ? this.dialogClient.nom : this.dialogClient.numero;
+    
+    if (!searchValue || searchValue.trim().length < 2) {
+      this.showSuggestions = false;
+      this.filteredSuggestions = [];
+      this.selectedExistingClient = null;
+      return;
+    }
+    
+    const searchLower = searchValue.trim().toLowerCase();
+    
+    // Filtrer les clients qui correspondent et qui ne sont PAS déjà dans le projet actuel
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    this.filteredSuggestions = this.allClients.filter(client => {
+      // Vérifier si le client correspond à la recherche
+      const nomMatch = client.nom?.toLowerCase().includes(searchLower);
+      const numeroMatch = client.numero?.toLowerCase().includes(searchLower);
+      const matchesSearch = nomMatch || numeroMatch;
+      
+      // Vérifier si le client n'est pas déjà dans le projet
+      const notInProject = !this.clients.some(c => c.id === client.id);
+      
+      return matchesSearch && notInProject;
+    }).slice(0, 10); // Limiter à 10 suggestions
+    
+    this.showSuggestions = this.filteredSuggestions.length > 0;
+    this.selectedExistingClient = null;
+  }
+  
+  // Sélectionner un client existant depuis les suggestions
+  selectSuggestion(client: ClientDTO) {
+    this.selectedExistingClient = client;
+    this.dialogClient.nom = client.nom || '';
+    this.dialogClient.numero = client.numero || '';
+    this.dialogClient.adresse = client.adresse || '';
+    this.dialogClient.mf = client.mf || '';
+    this.showSuggestions = false;
+    this.filteredSuggestions = [];
+  }
+  
+  // Fermer les suggestions si on clique ailleurs
+  closeSuggestions() {
+    setTimeout(() => {
+      this.showSuggestions = false;
+    }, 200);
+  }
+
+  
+
+  selectClient(cl: ClientDTO) {
+    this.dialogClient = {
+      id: cl.id,
+      nom: cl.nom,
+      numero: cl.numero,
+      adresse: cl.adresse,
+      mf: cl.mf,
+      quantitesAutoriseesParProjet: cl.quantitesAutoriseesParProjet
+    };
+    this.selectedClient = cl;
+    this.editMode = true;
+    this.showAddClient = true;
+  }
+
+  // Helper: retourne aujourd'hui au format yyyy-MM-dd (heure locale)
+  private getTodayString(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth()+1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  addDialogClient() {
+    if (!this.dialogClient.nom || !this.dialogClient.numero) {
+      this.error = 'Veuillez remplir tous les champs.';
+      return;
+    }
+    
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    console.log('🔵 addDialogClient() - targetProjetId:', targetProjetId, 'contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId);
+    
+    if (!targetProjetId) {
+      this.showTemporaryAlert(
+        'Aucun projet actif. Veuillez d\'abord sélectionner un projet.',
+        'danger'
+      );
+      return;
+    }
+    
+    // Si un client existant a été sélectionné, on l'associe au projet
+    if (this.selectedExistingClient && this.selectedExistingClient.id) {
+      // Vérifier si le client est déjà associé à ce projet
+      const isAlreadyInProject = this.clients.some(c => c.id === this.selectedExistingClient!.id);
+      
+      if (isAlreadyInProject) {
+        this.showTemporaryAlert(
+          'Ce client est déjà associé à ce projet.',
+          'warning'
+        );
+        this.closeDialog();
+        return;
+      }
+      
+      console.log('✅ Association client existant:', this.selectedExistingClient.id, 'au projet:', targetProjetId);
+      // Associer le client existant au projet
+      this.askQuantiteAndAssociate(this.selectedExistingClient.id);
+      this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+      this.closeDialog();
+      return;
+    }
+    
+    // Sinon, créer un nouveau client (SANS projetId - l'association se fait via ProjetClient)
+    console.log('🆕 Création nouveau client:', this.dialogClient.nom, 'pour le projet:', targetProjetId);
+   
+    this.clientService.createClient(this.dialogClient, 'body').subscribe({
+      next: (createdClient) => {
+        console.log('✅ Client créé:', createdClient);
+    
+        let clientId: number | undefined;
+        if (createdClient instanceof Blob) {
+          createdClient.text().then(text => {
+            try {
+              const client = JSON.parse(text);
+              clientId = client.id;
+              console.log('➡️ Association client', clientId, 'au projet', targetProjetId);
+              // Fermer le dialogue d'ajout AVANT d'ouvrir la modal quantité
+              this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+              this.closeDialog();
+              // Ouvrir la modal quantité
+              this.askQuantiteAndAssociate(clientId);
+            } catch (e) { 
+              console.error('❌ Erreur parsing client:', e); 
+            }
+          });
+        } else {
+          clientId = createdClient.id;
+          console.log('➡️ Association client', clientId, 'au projet', targetProjetId);
+          // Fermer le dialogue d'ajout AVANT d'ouvrir la modal quantité
+          this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+          this.closeDialog();
+          // Ouvrir la modal quantité
+          this.askQuantiteAndAssociate(clientId);
+        }
+      },
+      error: (err) => {
+        console.error('❌ Erreur création client:', err);
+        this.error = 'Erreur ajout: ' + (err.error?.message || err.message);
+      }
+    });
+  }
+
+  // Ask user for quantiteAutorisee and then associate using ProjetController endpoint
+  askQuantiteAndAssociate(clientId?: number) {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+ 
+    if (!clientId || !targetProjetId) return;
+    
+    // Ouvrir la modal personnalisée au lieu du prompt système
+    this.pendingClientId = clientId;
+    this.quantiteAutorisee = 0;
+    // Default to autorisation mode for new associations (per new data model)
+    this.addAutorisationMode = true;
+    this.addingAutorisation = [];
+    this.showQuantiteModal = true;
+  }
+  
+  // Confirmer l'ajout du client avec la quantité saisie
+  confirmQuantiteAndAssociate() {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    const clientId = this.pendingClientId;
+
+    if (!clientId || !targetProjetId) {
+      this.showTemporaryAlert('Erreur: Données manquantes pour l\'association.', 'danger');
+      return;
+    }
+
+    // We only support Autorisations when adding a client to a projet
+    const autorisations = (this.addingAutorisation || [])
+      .map(a => ({ code: (a.code && a.code.trim()) ? a.code.trim() : 'DEFAULT', quantite: Number(a.quantite) || 0 }))
+      .filter(a => a.quantite > 0);
+
+    if (!autorisations.length) {
+      this.showTemporaryAlert('Veuillez ajouter au moins une autorisation (code et quantité).', 'warning');
+      return;
+    }
+
+    const totalToAdd = autorisations.reduce((s, a) => s + a.quantite, 0);
+
+    // Check remaining quantity before calling API
+    this.quantiteService.getQuantiteRestante(targetProjetId).subscribe({
+      next: (quantiteRestante) => {
+        if (totalToAdd > quantiteRestante) {
+          this.showTemporaryAlert('Impossible d\'ajouter le client : la quantité autorisée dépasse la quantité restante.', 'danger');
+          return;
+        }
+
+  // Include the total quantity as quantiteAutorisee so the backend (which
+  // currently supports quantiteAutorisee) stores the correct total even
+  // if it doesn't persist the per-code breakdown yet.
+  const body = { autorisation: autorisations, quantiteAutorisee: totalToAdd };
+        this.projetService.addClientToProjet(targetProjetId, clientId, body).subscribe({
+          next: (res) => {
+            this.closeQuantiteModal();
+            const projet = this.contextProjet || this.projetActif;
+            const nomProjet = projet?.nom || `Projet ${targetProjetId}`;
+            this.showTemporaryAlert(`Le client a été ajouté avec succès au projet "${nomProjet}".`, 'success');
+            this.loadClients();
+            this.loadVoyages();
+          },
+          error: async (err) => {
+            console.error('Erreur association client-projet:', err);
+            let errorMsg = '';
+            if (err.error instanceof Blob) {
+              try { errorMsg = await err.error.text(); } catch (e) { /* ignore */ }
+            } else if (err.error) {
+              errorMsg = typeof err.error === 'string' ? err.error : (err.error.message || err.error.error || '');
+            }
+
+            this.closeQuantiteModal();
+            if (err.status === 400 || err.status === 403) {
+              this.showTemporaryAlert('Impossible d\'ajouter le client : la quantité autorisée dépasse la quantité restante.', 'danger');
+            } else {
+              this.showTemporaryAlert(errorMsg || 'Erreur lors de l\'ajout du client au projet.', 'danger');
+            }
+
+            this.notificationService.rafraichir();
+            if (clientId) {
+              this.clientService.deleteClient(clientId).subscribe({ next: () => {}, error: () => {} });
+            }
+          }
+        });
+      },
+      error: () => {
+        // If we can't get remaining, attempt create and let backend validate
+  // Fallback path (couldn't fetch remaining on client) — still send
+  // the autorisation array AND the total as quantiteAutorisee so backend
+  // records the correct total instead of defaulting to 0.
+  const body = { autorisation: autorisations, quantiteAutorisee: totalToAdd };
+        this.projetService.addClientToProjet(targetProjetId, clientId, body).subscribe({
+          next: (res) => {
+            this.closeQuantiteModal();
+            this.showTemporaryAlert('Le client a été ajouté (vérifiez la validité côté serveur).', 'success');
+            this.loadClients();
+            this.loadVoyages();
+          },
+          error: async (err) => {
+            console.error('Erreur association client-projet (fallback):', err);
+            let errorMsg = '';
+            if (err.error instanceof Blob) {
+              try { errorMsg = await err.error.text(); } catch (e) {}
+            } else if (err.error) {
+              errorMsg = typeof err.error === 'string' ? err.error : (err.error.message || err.error.error || '');
+            }
+            this.closeQuantiteModal();
+            if (err.status === 400 || err.status === 403) {
+              this.showTemporaryAlert('Impossible d\'ajouter le client : la quantité autorisée dépasse la quantité restante.', 'danger');
+            } else {
+              this.showTemporaryAlert(errorMsg || 'Erreur lors de l\'ajout du client au projet.', 'danger');
+            }
+            this.notificationService.rafraichir();
+            if (clientId) {
+              this.clientService.deleteClient(clientId).subscribe({ next: () => {}, error: () => {} });
+            }
+          }
+        });
+      }
+    });
+  }
+
+  updateDialogClient() {
+    if (!this.dialogClient?.id) return;
+    this.clientService.updateClient(this.dialogClient.id, this.dialogClient, 'body').subscribe({
+      next: () => {
+        this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+        this.selectedClient = null;
+        this.editMode = false;
+        this.loadClients();
+        this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
+        this.closeDialog();
+      },
+      error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
+    });
+  }
+
+  closeDialog() {
+    this.showAddClient = false;
+    this.editMode = false;
+    this.dialogClient = { nom: '', numero: '', adresse: '', mf: '' };
+    this.selectedClient = null;
+    this.error = '';
+  }
+
+  loadClients() {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    console.log('📊 loadClients() - contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId, 'targetProjetId:', targetProjetId);
+    
+    if (!targetProjetId) {
+      console.warn('⚠️ Aucun projet actif - liste des clients vide');
+      this.clients = [];
+      this.applyFilter();
+      return;
+    }
+    
+    // Charger les ProjetClient pour ce projet via l'API
+    const url = `${this.basePath}/api/projet-client/projet/${targetProjetId}`;
+    console.log('📤 Appel endpoint projet-clients:', url);
+    
+    this.http.get<any[]>(url, { withCredentials: true, responseType: 'json' as 'json' }).subscribe({
+      next: (projetClients) => {
+        console.log('✅ Réponse getProjetClientsByProjetId:', projetClients);
+        
+        if (!Array.isArray(projetClients) || projetClients.length === 0) {
+          this.clients = [];
+          this.applyFilter();
+          return;
+        }
+        
+        // Récupérer les IDs uniques des clients
+        const clientIds = [...new Set(projetClients.map((pc: any) => pc.clientId))];
+        
+        // Charger tous les clients
+        this.http.get<any[]>(`${this.basePath}/api/clients`, { 
+          withCredentials: true, 
+          responseType: 'json' as 'json' 
+        }).subscribe({
+          next: (allClients) => {
+            // Filtrer et enrichir avec les infos de ProjetClient
+            this.clients = allClients
+                  .filter((client: any) => clientIds.includes(client.id))
+                  .map((client: any) => {
+                    const projetClient = projetClients.find((pc: any) => pc.clientId === client.id);
+                    // autorisation may be an array of {code, quantite} OR a JSON string (backend sometimes returns string)
+                    let autorisations: any = projetClient?.autorisation || [];
+                    // If autorisations is a JSON string, try to parse it into an array
+                    if (typeof autorisations === 'string' && autorisations.trim().length > 0) {
+                      try {
+                        const parsed = JSON.parse(autorisations);
+                        autorisations = Array.isArray(parsed) ? parsed : autorisations;
+                      } catch (e) {
+                        // leave as-is (fallback) — we'll treat non-array as empty below
+                        console.warn('Warn: unable to parse projetClient.autorisation JSON string', e);
+                      }
+                    }
+
+                    // Normalize autorisation entries to ensure { code, quantite }
+                    if (Array.isArray(autorisations)) {
+                      autorisations = autorisations.map((a: any) => ({
+                        code: (a && a.code) ? String(a.code) : 'DEFAULT',
+                        quantite: Number(a && a.quantite) || 0
+                      }));
+                    } else {
+                      // not an array: fall back to empty list so template will show totals
+                      autorisations = [];
+                    }
+
+                    const sumAutorisation = autorisations.length > 0
+                      ? autorisations.reduce((s: number, a: any) => s + (a?.quantite || 0), 0)
+                      : (projetClient?.quantiteAutorisee || 0);
+
+                    // also populate quantitesAutoriseesParProjet for compatibility with getQuantitePourProjet
+                    const quantitesMap: any = {};
+                    quantitesMap[targetProjetId] = sumAutorisation;
+
+                    return {
+                      ...client,
+                      projetClientId: projetClient?.id,
+                      autorisation: autorisations,
+                      quantiteAutorisee: sumAutorisation,
+                      quantitesAutoriseesParProjet: quantitesMap,
+                      projetId: targetProjetId
+                    };
+                  })
+              .sort((a: any, b: any) => (b.id || 0) - (a.id || 0));
+            
+            console.log(`✅ ${this.clients.length} clients enrichis pour le projet ${targetProjetId}`);
+            this.applyFilter();
+          },
+          error: (err: any) => {
+            console.error('❌ Erreur chargement détails clients:', err);
+            this.clients = [];
+            this.applyFilter();
+          }
+        });
+      },
+      error: err => {
+        console.error('❌ Erreur chargement projet-clients:', err);
+        this.error = 'Erreur chargement des clients: ' + (err.error?.message || err.message);
+        this.clients = [];
+        this.applyFilter();
+      }
+    });
+  }
+
+  applyFilter() {
+    const filter = this.clientFilter.trim().toLowerCase();
+    let clientsFiltrés = this.clients;
+    
+    // Filtre par texte uniquement (clients déjà filtrés par projet lors du chargement)
+    if (filter) {
+      clientsFiltrés = clientsFiltrés.filter(c =>
+        (c.nom?.toLowerCase().includes(filter) || false) ||
+        (c.numero?.toLowerCase().includes(filter) || false)
+      );
+    }
+    this.filteredClients = clientsFiltrés;
+    this.currentPage = 1;
+    this.updatePagination();
+  }
+
+  // Sorting methods
+  sortBy(column: string) {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.sortClients();
+  }
+
+  sortClients() {
+    this.filteredClients.sort((a: any, b: any) => {
+      let aVal = a[this.sortColumn];
+      let bVal = b[this.sortColumn];
+      
+      if (this.sortColumn === 'quantite') {
+        aVal = this.getQuantitePourProjet(a) || 0;
+        bVal = this.getQuantitePourProjet(b) || 0;
+      }
+      
+      if (this.sortColumn === 'quantiteVendue') {
+        aVal = this.getTotalLivreClient(a.id);
+        bVal = this.getTotalLivreClient(b.id);
+      }
+      
+      if (this.sortColumn === 'reste') {
+        aVal = this.getResteClient(a);
+        bVal = this.getResteClient(b);
+      }
+      
+      if (aVal === undefined || aVal === null) aVal = '';
+      if (bVal === undefined || bVal === null) bVal = '';
+      
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      
+      if (aVal < bVal) return this.sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return this.sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+    this.updatePagination();
+  }
+
+  // Pagination methods
+  updatePagination() {
+    this.totalPages = Math.ceil(this.filteredClients.length / this.pageSize);
+    if (this.currentPage > this.totalPages) {
+      this.currentPage = this.totalPages || 1;
+    }
+    const startIndex = (this.currentPage - 1) * this.pageSize;
+    const endIndex = startIndex + this.pageSize;
+    this.paginatedClients = this.filteredClients.slice(startIndex, endIndex);
+  }
+
+  onPageSizeChange() {
+    this.currentPage = 1;
+    this.updatePagination();
+  }
+
+  goToPage(page: number) {
+    if (page >= 1 && page <= this.totalPages) {
+      this.currentPage = page;
+      this.updatePagination();
+    }
+  }
+
+  getPageNumbers(): number[] {
+    const pages: number[] = [];
+    const maxVisible = 5;
+    let start = Math.max(1, this.currentPage - Math.floor(maxVisible / 2));
+    let end = Math.min(this.totalPages, start + maxVisible - 1);
+    
+    if (end - start < maxVisible - 1) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+    
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  }
+
+  deleteClient(id?: number) {
+    if (id === undefined) return;
+
+    const dialogRef = this.dialog.open(ConfirmCodeDialogComponent, { disableClose: true });
+    dialogRef.afterClosed().subscribe((ok: boolean) => {
+      if (ok === true) {
+        this.clientService.deleteClient(id, 'body').subscribe({
+          next: () => {
+            this.loadClients();
+            this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
+          },
+          error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
+        });
+      }
+    });
+  }
+
+  cancelEdit() {
+    this.selectedClient = null;
+    this.editMode = false;
+  }
+
+  // Charger les voyages pour le projet actif
+  loadVoyages() {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (!targetProjetId) {
+      this.voyages = [];
+      return;
+    }
+    
+    this.voyageService.getVoyagesByProjet(targetProjetId, 'body').subscribe({
+      next: async (data) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            this.voyages = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            this.voyages = [];
+          }
+        } else {
+          this.voyages = Array.isArray(data) ? data : [];
+        }
+      },
+      error: (err) => {
+        console.error('Erreur chargement voyages:', err);
+        this.voyages = [];
+      }
+    });
+  }
+
+  // Charger les déchargements (utilisés pour calculer les quantités par code)
+  loadDechargements() {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (!targetProjetId) {
+      this.dechargements = [];
+      return;
+    }
+
+    this.dechargementService.getAllDechargements().subscribe({
+      next: async (data: any) => {
+        let all: any[] = [];
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            all = JSON.parse(text);
+          } catch (e) {
+            all = [];
+          }
+        } else {
+          all = Array.isArray(data) ? data : [];
+        }
+
+        // Filtrer par projet actif
+        this.dechargements = all.filter(d => d.projetId === targetProjetId);
+        console.log(`✅ ${this.dechargements.length} déchargements chargés pour le projet ${targetProjetId}`);
+      },
+      error: (err) => {
+        console.error('Erreur chargement déchargements:', err);
+        this.dechargements = [];
+      }
+    });
+  }
+
+  // Récupère la quantité autorisée pour le projet actif depuis la map renvoyée par le backend
+  getQuantitePourProjet(client: any): number | undefined {
+    if (!this.projetActifId || !client) return undefined;
+    if (client.quantitesAutoriseesParProjet) {
+      return client.quantitesAutoriseesParProjet[this.projetActifId];
+    }
+    // fallback si jamais la structure change
+    return (client.quantiteAutorisee !== undefined) ? client.quantiteAutorisee : undefined;
+  }
+  
+  // Calculer le total livré pour un client
+  getTotalLivreClient(clientId?: number): number {
+    if (!clientId || !this.voyages) return 0;
+    
+    let filteredVoyages = this.voyages.filter(v => v.clientId === clientId && v.poidsClient);
+    
+    // Si un filtre de date est actif, filtrer par plage avec journée de travail [07:00, 06:00)
+    if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
+      filteredVoyages = filteredVoyages.filter(v => {
+        if (!v.date) return false;
+        const voyageDateTime = new Date(v.date);
+        
+        // Si date début définie, vérifier que le voyage est >= dateDebut 07:00
+        if (this.dateDebut) {
+          const startDate = new Date(this.dateDebut + 'T00:00:00');
+          startDate.setHours(7, 0, 0, 0);
+          if (voyageDateTime < startDate) return false;
+        }
+        
+        // Si date fin définie, vérifier que le voyage est < dateFin+1 06:00
+        if (this.dateFin) {
+          const endDate = new Date(this.dateFin + 'T00:00:00');
+          endDate.setDate(endDate.getDate() + 1);
+          endDate.setHours(6, 0, 0, 0);
+          if (voyageDateTime >= endDate) return false;
+        }
+        
+        return true;
+      });
+    }
+    
+    return filteredVoyages.reduce((sum, v) => sum + (v.poidsClient || 0), 0);
+  }
+  
+  // Calculer le reste pour un client
+  getResteClient(client: any): number {
+    if (!client || !client.id) return 0;
+    const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+    const totalLivre = this.getTotalLivreClient(client.id);
+    return quantiteAutorisee - totalLivre;
+  }
+
+  // Calculer le total déjà livré pour un client ET un code (si les déchargements portent la propriété autorisationCode)
+  getTotalLivreForClientCode(clientId?: number, code?: string): number {
+    if (!clientId) return 0;
+
+    let filtered = this.dechargements.filter(d => d.clientId === clientId && (d.autorisationCode || d.autorisation?.code) === code);
+
+    // Appliquer filtre de date si activé (basé sur dateDechargement)
+    if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
+      filtered = filtered.filter(d => {
+        const dDate = d.dateDechargement || d.dateChargement || d.date || null;
+        if (!dDate) return false;
+        const voyageDateTime = new Date(dDate);
+
+        if (this.dateDebut) {
+          const startDate = new Date(this.dateDebut + 'T00:00:00');
+          startDate.setHours(7, 0, 0, 0);
+          if (voyageDateTime < startDate) return false;
+        }
+        if (this.dateFin) {
+          const endDate = new Date(this.dateFin + 'T00:00:00');
+          endDate.setDate(endDate.getDate() + 1);
+          endDate.setHours(6, 0, 0, 0);
+          if (voyageDateTime >= endDate) return false;
+        }
+        return true;
+      });
+    }
+
+    return filtered.reduce((sum, d) => {
+      const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+      return sum + (poidsNet || 0);
+    }, 0);
+  }
+
+  // Calculer le reste pour un client pour un code donné
+  getResteForClientCode(client: any, code?: string): number {
+    if (!client) return 0;
+    const autorisations = (client && client.autorisation) ? client.autorisation : [];
+    // trouver quantite autorisee pour ce code
+    let quantite = 0;
+    if (Array.isArray(autorisations) && autorisations.length > 0) {
+      const found = autorisations.find((a: any) => (a.code || 'DEFAULT') === (code || 'DEFAULT'));
+      quantite = found ? (found.quantite || 0) : 0;
+    } else {
+      // fallback to legacy map
+      quantite = this.getQuantitePourProjet(client) || 0;
+    }
+
+    const livre = this.getTotalLivreForClientCode(client.id, code);
+    return quantite - livre;
+  }
+
+  // Vérifier si un client a dépassé sa quantité autorisée
+  isClientEnDepassement(client: any): boolean {
+    if (!client) return false;
+    const reste = this.getResteClient(client);
+    return reste < 0;
+  }
+  
+  // Obtenir la couleur selon le reste
+  getResteColor(reste: number, quantiteAutorisee: number): string {
+    if (quantiteAutorisee === 0) return '#64748b'; // Gris si pas de limite
+    const percentage = (reste / quantiteAutorisee) * 100;
+    if (percentage > 50) return '#10b981'; // Vert
+    if (percentage > 20) return '#f59e0b'; // Orange
+    return '#ef4444'; // Rouge
+  }
+
+  // Affiche une alerte temporaire pendant 1 minute
+  showTemporaryAlert(message: string, type: 'success' | 'danger' | 'warning' | 'info' = 'info') {
+    this.alertMessage = message;
+    this.alertType = type;
+    this.showAlert = true;
+    
+    // Masquer l'alerte après 1 minute (60000 ms)
+    setTimeout(() => {
+      this.showAlert = false;
+      this.alertMessage = '';
+    }, 60000);
+  }
+
+  // Retourne le titre selon le type d'alerte
+  getAlertTitle(): string {
+    switch (this.alertType) {
+      case 'success': return 'Succès !';
+      case 'danger': return 'Erreur !';
+      case 'warning': return 'Attention !';
+      case 'info': return 'Information';
+      default: return 'Notification';
+    }
+  }
+
+  // Ferme l'alerte manuellement
+  closeAlert() {
+    this.showAlert = false;
+    this.alertMessage = '';
+  }
+  
+  // Annuler l'ajout du client et supprimer le client créé
+  cancelQuantiteModal() {
+    if (this.pendingClientId) {
+      // Supprimer le client qui a été créé
+      this.clientService.deleteClient(this.pendingClientId, 'body').subscribe({
+        next: () => {
+          console.log('Client supprimé après annulation');
+          this.loadClients();
+          this.loadVoyages();
+        },
+        error: (err) => {
+          console.error('Erreur lors de la suppression du client:', err);
+        }
+      });
+    }
+    
+    // Fermer la modal
+    this.showQuantiteModal = false;
+    this.pendingClientId = null;
+    this.quantiteAutorisee = 0;
+  }
+  
+  // Fermer la modal de quantité sans supprimer
+  closeQuantiteModal() {
+    this.showQuantiteModal = false;
+    this.pendingClientId = null;
+    this.quantiteAutorisee = 0;
+    this.addAutorisationMode = false;
+    this.addingAutorisation = [];
+  }
+  
+  // Activer/désactiver le filtre par date
+  toggleDateFilter() {
+    this.dateFilterActive = !this.dateFilterActive;
+    this.updatePagination();
+  }
+  
+  // Gérer le changement de date
+  onDateFilterChange() {
+    // Clamp future dates
+    if (this.dateDebut && this.today && this.dateDebut > this.today) {
+      this.dateDebut = this.today;
+    }
+    if (this.dateFin && this.today && this.dateFin > this.today) {
+      this.dateFin = this.today;
+    }
+    // Relancer le filtrage ou au moins la pagination
+    this.applyFilter();
+    this.updatePagination();
+  }
+  
+  // Effacer le filtre par date
+  clearDateFilter() {
+    this.dateFilterActive = false;
+    this.dateDebut = null;
+    this.dateFin = null;
+    this.updatePagination();
+  }
+  
+  // Formater la date en français
+  formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    };
+    return date.toLocaleDateString('fr-FR', options);
+  }
+
+  // Export PDF
+  exportToPDF(): void {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Titre
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Liste des Clients', 14, 15);
+
+    // Informations du projet
+    if (this.projetActif) {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      let yPos = 25;
+      
+      if (this.projetActif.nomNavire) {
+        doc.text(`Navire: ${this.projetActif.nomNavire}`, 14, yPos);
+        yPos += 6;
+      }
+      if (this.projetActif.port) {
+        doc.text(`Port: ${this.projetActif.port}`, 14, yPos);
+        yPos += 6;
+      }
+      if (this.projetActif.nomProduit) {
+        doc.text(`Produit: ${this.projetActif.nomProduit}`, 14, yPos);
+        yPos += 6;
+      }
+    }
+
+    // Statistiques
+    const totalClients = this.filteredClients.length;
+    const totalQuantiteAutorisee = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getQuantitePourProjet(c) || 0), 0
+    );
+    const totalEnleve = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getTotalLivreClient(c.id) || 0), 0
+    );
+    const totalReste = totalQuantiteAutorisee - totalEnleve;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    let statsY = this.projetActif ? 45 : 25;
+    doc.text(`Total Clients: ${totalClients}`, 14, statsY);
+    doc.text(`Quantité Totale: ${totalQuantiteAutorisee.toFixed(0)} T`, 70, statsY);
+    doc.text(`Total Enlevé: ${totalEnleve.toFixed(2)} T`, 140, statsY);
+    doc.text(`Reste Total: ${totalReste.toFixed(2)} T`, 200, statsY);
+
+    // Filtres appliqués
+    if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(9);
+      statsY += 6;
+      let filterText = 'Filtre par date: ';
+      if (this.dateDebut && this.dateFin) {
+        filterText += `${this.formatDate(this.dateDebut)} - ${this.formatDate(this.dateFin)}`;
+      } else if (this.dateDebut) {
+        filterText += `À partir du ${this.formatDate(this.dateDebut)}`;
+      } else if (this.dateFin) {
+        filterText += `Jusqu'au ${this.formatDate(this.dateFin)}`;
+      }
+      doc.text(filterText, 14, statsY);
+    }
+
+    // Préparer les données du tableau
+    const tableData = this.filteredClients.map(client => {
+      const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+      const totalLivre = this.getTotalLivreClient(client.id);
+      const reste = quantiteAutorisee - totalLivre;
+      
+      return [
+        client.nom || '-',
+        client.numero || '-',
+        client.adresse || '-',
+        client.mf || '-',
+        quantiteAutorisee.toFixed(0),
+        totalLivre.toFixed(2),
+        reste.toFixed(2)
+      ];
+    });
+
+    // Générer le tableau
+    autoTable(doc, {
+      startY: statsY + 10,
+      head: [['Nom', 'Numéro', 'Adresse', 'MF', 'Qté Autorisée (T)', 'Enlevé (T)', 'Reste (T)']],
+      body: tableData,
+      theme: 'grid',
+      styles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      headStyles: {
+        fillColor: [102, 126, 234],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 10
+      },
+      columnStyles: {
+        0: { cellWidth: 40 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 50 },
+        3: { cellWidth: 30 },
+        4: { cellWidth: 30, halign: 'right' },
+        5: { cellWidth: 25, halign: 'right' },
+        6: { cellWidth: 25, halign: 'right' }
+      },
+      didDrawPage: (data) => {
+        // Footer
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(
+          `Page ${data.pageNumber} / ${pageCount} - Généré le ${new Date().toLocaleDateString('fr-FR')}`,
+          14,
+          pageHeight - 10
+        );
+      }
+    });
+
+    // Télécharger le PDF
+    const fileName = `Clients_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+    doc.save(fileName);
+  }
+
+  // Export Excel
+  exportToExcel(): void {
+    // Préparer les données
+    const data = this.filteredClients.map(client => {
+      const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+      const totalLivre = this.getTotalLivreClient(client.id);
+      const reste = quantiteAutorisee - totalLivre;
+      
+      return {
+        'Nom': client.nom || '-',
+        'Numéro': client.numero || '-',
+        'Adresse': client.adresse || '-',
+        'MF': client.mf || '-',
+        'Quantité Autorisée (T)': quantiteAutorisee.toFixed(0),
+        'Enlevé (T)': totalLivre.toFixed(2),
+        'Reste (T)': reste.toFixed(2)
+      };
+    });
+
+    // Créer la feuille de calcul
+    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(data);
+
+    // Définir la largeur des colonnes
+    ws['!cols'] = [
+      { wch: 30 }, // Nom
+      { wch: 15 }, // Numéro
+      { wch: 40 }, // Adresse
+      { wch: 20 }, // MF
+      { wch: 20 }, // Quantité Autorisée
+      { wch: 15 }, // Enlevé
+      { wch: 15 }  // Reste
+    ];
+
+    // Créer le classeur
+    const wb: XLSX.WorkBook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Clients');
+
+    // Ajouter une feuille de statistiques
+    const totalClients = this.filteredClients.length;
+    const totalQuantiteAutorisee = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getQuantitePourProjet(c) || 0), 0
+    );
+    const totalEnleve = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getTotalLivreClient(c.id) || 0), 0
+    );
+    const totalReste = totalQuantiteAutorisee - totalEnleve;
+
+    const statsData = [
+      { 'Statistique': 'Total Clients', 'Valeur': totalClients },
+      { 'Statistique': 'Quantité Totale Autorisée (T)', 'Valeur': totalQuantiteAutorisee.toFixed(2) },
+      { 'Statistique': 'Total Enlevé (T)', 'Valeur': totalEnleve.toFixed(2) },
+      { 'Statistique': 'Reste Total (T)', 'Valeur': totalReste.toFixed(2) }
+    ];
+
+    if (this.projetActif) {
+      statsData.unshift(
+        { 'Statistique': 'Navire', 'Valeur': this.projetActif.nomNavire || '-' },
+        { 'Statistique': 'Port', 'Valeur': this.projetActif.port || '-' },
+        { 'Statistique': 'Produit', 'Valeur': this.projetActif.nomProduit || '-' }
+      );
+    }
+
+    const wsStats: XLSX.WorkSheet = XLSX.utils.json_to_sheet(statsData);
+    wsStats['!cols'] = [{ wch: 30 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, wsStats, 'Statistiques');
+
+    // Télécharger le fichier
+    const fileName = `Clients_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
+  // Modal pour modifier la quantité autorisée
+  openEditQuantiteModal(client: any) {
+    this.editingClient = client;
+    this.newQuantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+    // prepare autorisation editor (clone existing if any)
+    this.editingAutorisation = (client && client.autorisation) ? JSON.parse(JSON.stringify(client.autorisation)) : [];
+    this.editAutorisationMode = (this.editingAutorisation && this.editingAutorisation.length > 0) ? true : false;
+    this.showEditQuantiteModal = true;
+  }
+
+  confirmEditQuantite() {
+    if (!this.editingClient) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: Client invalide';
+      return;
+    }
+
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (!targetProjetId) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: Aucun projet actif';
+      return;
+    }
+
+    // Always operate in autorisation mode for edits (no more simple-quantity mode)
+    const projetClientId = this.editingClient.projetClientId;
+    if (!projetClientId) {
+      this.showAlert = true;
+      this.alertType = 'danger';
+      this.alertMessage = 'Erreur: Association projet-client introuvable';
+      return;
+    }
+
+    const rows = (this.editingAutorisation || []).map(r => ({ code: r.code && r.code.trim() ? r.code.trim() : 'DEFAULT', quantite: Number(r.quantite) || 0 }));
+    if (!rows.length) {
+      this.showTemporaryAlert('Veuillez ajouter au moins une autorisation (code et quantité).', 'warning');
+      return;
+    }
+
+    for (const r of rows) {
+      if (r.quantite < 0) {
+        this.showTemporaryAlert('Veuillez vérifier les quantités des autorisations (≥ 0).', 'danger');
+        return;
+      }
+    }
+
+    const newTotal = rows.reduce((s: number, a: any) => s + (Number(a.quantite) || 0), 0);
+    const existingAlloc = this.getQuantitePourProjet(this.editingClient) || 0;
+
+    this.quantiteService.getQuantiteRestante(targetProjetId).subscribe({
+      next: (quantiteRestante) => {
+        const allowed = quantiteRestante + existingAlloc;
+        if (newTotal > allowed) {
+          this.showTemporaryAlert('Impossible d\'ajouter le client : la quantité autorisée dépasse la quantité restante.', 'danger');
+          return;
+        }
+
+        // Proceed with update via autorisation endpoint
+        this.http.put(
+          `${this.basePath}/api/projet-client/${projetClientId}/autorisation`,
+          rows,
+          { observe: 'body', responseType: 'json' }
+        ).subscribe({
+          next: () => {
+            this.showAlert = true;
+            this.alertType = 'success';
+            this.alertMessage = `Autorisations mises à jour avec succès.`;
+            this.showEditQuantiteModal = false;
+            this.editingClient = null;
+            this.editAutorisationMode = false;
+            setTimeout(() => this.loadClients(), 200);
+          },
+          error: (err) => {
+            console.error('❌ Erreur mise à jour autorisations:', err);
+            this.showEditQuantiteModal = false;
+            this.editingClient = null;
+            this.editAutorisationMode = false;
+            this.showAlert = true;
+            this.alertType = 'danger';
+            this.alertMessage = err.error?.message || 'Erreur lors de la mise à jour des autorisations.';
+            setTimeout(() => this.loadClients(), 200);
+          }
+        });
+      },
+      error: () => {
+        // fallback: attempt update and let backend validate
+        this.http.put(
+          `${this.basePath}/api/projet-client/${projetClientId}/autorisation`,
+          rows,
+          { observe: 'body', responseType: 'json' }
+        ).subscribe({
+          next: () => {
+            this.showAlert = true;
+            this.alertType = 'success';
+            this.alertMessage = `Autorisations mises à jour avec succès.`;
+            this.showEditQuantiteModal = false;
+            this.editingClient = null;
+            this.editAutorisationMode = false;
+            setTimeout(() => this.loadClients(), 200);
+          },
+          error: (err) => {
+            console.error('❌ Erreur mise à jour autorisations (fallback):', err);
+            this.showEditQuantiteModal = false;
+            this.editingClient = null;
+            this.editAutorisationMode = false;
+            this.showAlert = true;
+            this.alertType = 'danger';
+            this.alertMessage = err.error?.message || 'Erreur lors de la mise à jour des autorisations.';
+            setTimeout(() => this.loadClients(), 200);
+          }
+        });
+      }
+    });
+  }
+
+  // Toggle between editing a simple quantity and editing the autorisation list
+  toggleEditAutorisationMode() {
+    // Force autorisation mode only (no legacy single-quantity mode)
+    this.editAutorisationMode = true;
+    if (!this.editingAutorisation || this.editingAutorisation.length === 0) {
+      const initialQty = this.newQuantiteAutorisee || 0;
+      if (initialQty > 0) {
+        this.editingAutorisation = [{ code: 'DEFAULT', quantite: initialQty }];
+      } else {
+        this.editingAutorisation = [];
+      }
+    }
+  }
+
+  addAutorisationRow() {
+    if (!this.editingAutorisation) this.editingAutorisation = [];
+    this.editingAutorisation.push({ code: '', quantite: 0 });
+  }
+
+  removeAutorisationRow(index: number) {
+    if (!this.editingAutorisation) return;
+    this.editingAutorisation.splice(index, 1);
+  }
+
+  getTotalEditingAutorisation(): number {
+    if (!this.editingAutorisation || this.editingAutorisation.length === 0) return 0;
+    return this.editingAutorisation.reduce((s, a) => s + (Number(a.quantite) || 0), 0);
+  }
+
+  // Total for addingAutorisation (used in add-modal template)
+  getAddingAutorisationTotal(): number {
+    if (!this.addingAutorisation || this.addingAutorisation.length === 0) return 0;
+    return this.addingAutorisation.reduce((s, a) => s + (Number(a.quantite) || 0), 0);
+  }
+
+  cancelEditQuantite() {
+    this.showEditQuantiteModal = false;
+    this.editingClient = null;
+    this.newQuantiteAutorisee = 0;
+    this.editAutorisationMode = false;
+    this.editingAutorisation = [];
+  }
+}

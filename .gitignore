@@ -1,0 +1,90 @@
+# ==========================
+# Angular + Electron .gitignore
+# ==========================
+
+# See http://help.github.com/ignore-files/ for more about ignoring files.
+
+# Compiled output
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# Node
+/node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Electron build output
+/out
+/out2
+/out3
+/build
+/release
+*.exe
+*.asar
+*.app
+*.dmg
+*.deb
+*.snap
+*.rpm
+*.zip
+*.tar.gz
+
+# Additional Electron/electron-builder artifacts
+/win-unpacked/
+/out*/win-unpacked/
+app-update.yml
+latest.yml
+*.blockmap
+resources/
+
+# Databases or temp data
+*.db
+*.mv.db
+*.sqlite
+
+# Logs
+*.log
+logs/
+debug.log
+error.log
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history/*
+
+# Miscellaneous
+/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# System files
+.DS_Store
+Thumbs.db

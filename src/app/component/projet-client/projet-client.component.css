@@ -1,0 +1,7 @@
+/* Style du composant Projet Client */
+.autorisation-list { list-style: none; padding: 0; margin: 8px 0; }
+.autorisation-list li { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.badge { background: #eef2ff; color:#3730a3; padding: 4px 8px; border-radius: 12px; font-weight:600; }
+.auth-pill { display:inline-block; background: linear-gradient(90deg,#fef3c7,#fde68a); padding:6px 10px; margin-right:6px; border-radius:12px; font-size:0.9rem; }
+.autorisation-cell { display:flex; flex-wrap:wrap; gap:6px; }
+.add-auth-edit input { margin-right:6px; }

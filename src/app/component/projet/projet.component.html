@@ -1,0 +1,1019 @@
+
+
+
+
+<app-navbar 
+	[isSidebarOpen]="isSidebarOpen" 
+	[sidebarWidth]="220" 
+	[sidebarClosedWidth]="70">
+</app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+	<main class="content">
+		<!-- Page Header -->
+		<div class="page-header">
+			<div class="header-left">
+				<div class="header-icon">
+					<i class="bi bi-folder"></i>
+				</div>
+				<div>
+					<h1 class="page-title">Projets</h1>
+					<p class="page-subtitle">{{ filteredProjets.length }} projet(s) trouvé(s)</p>
+				</div>
+			</div>
+			<button class="add-btn" (click)="openAddProjetModal()">
+				<i class="bi bi-plus-lg"></i>
+				<span>Ajouter un projet</span>
+			</button>
+		</div>
+
+		<!-- Message d'erreur amélioré avec style moderne -->
+		<div *ngIf="error" class="error-message-container">
+			<div class="error-message-card">
+				<div class="error-icon">
+					<i class="bi bi-exclamation-triangle-fill"></i>
+				</div>
+				<div class="error-content">
+					<h5 class="error-title">Attention</h5>
+					<div class="error-text">{{ error }}</div>
+				</div>
+				<button type="button" class="error-close" (click)="error = ''" aria-label="Close">
+					<i class="bi bi-x-lg"></i>
+				</button>
+			</div>
+		</div>
+
+		<!-- Toolbar -->
+		<div class="toolbar-section">
+			<div class="search-box">
+				<i class="bi bi-search"></i>
+				<input 
+					type="text" 
+					class="search-input" 
+					placeholder="Rechercher par nom, produit ou navire..." 
+					[(ngModel)]="projetFilter" 
+					(input)="applyFilter()"
+				/>
+			</div>
+			<div class="toolbar-right">
+				<span class="results-count">{{ filteredProjets.length }} résultat(s)</span>
+				<div class="page-size-selector">
+					<span>Afficher</span>
+					<select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+						<option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+					</select>
+					<span>projets</span>
+				</div>
+			</div>
+		</div>
+
+		<!-- Liste des projets en cards avec FLIP ANIMATION -->
+		<div class="row g-4 mb-4">
+			<div *ngFor="let pr of paginatedProjets" class="col-md-6 col-lg-4">
+				<!-- Container avec perspective pour l'effet 3D -->
+				<div class="projet-card-container">
+					<!-- Carte avec 2 faces (avant/arrière) -->
+					<div class="projet-card" [class.active-project]="pr.active">
+						
+						<!-- ========== FACE AVANT ========== -->
+						<div class="projet-card-front">
+							<!-- Header avec gradient et sociétés -->
+							<div class="projet-card-header">
+								<!-- Badge Projet Actif -->
+								<div class="active-badge" *ngIf="pr.active">
+									<i class="bi bi-check-circle-fill"></i>
+									<span>ACTIF</span>
+								</div>
+								
+								<!-- Icône Paramètres en haut à droite -->
+								<a class="header-settings-icon" [routerLink]="['/projet', pr.id, 'parametre']" (click)="$event.stopPropagation()" title="Paramètres">
+									<i class="bi bi-gear-fill"></i>
+								</a>
+								
+								<!-- Sociétés affichées en badges dans le header -->
+								<div class="projet-societes">
+									<span *ngFor="let nom of getSocieteNames(pr)" class="societe-badge-header">
+										<i class="bi bi-building"></i>
+										{{ nom }}
+									</span>
+									<span *ngIf="getSocieteNames(pr).length === 0" class="societe-badge-header">
+										<i class="bi bi-building"></i>
+										Aucune société
+									</span>
+								</div>
+								
+								<h5 class="projet-card-title">{{ pr.nomProduit }}</h5>
+							</div>
+
+							<!-- Body avec informations principales -->
+							<div class="projet-card-body">
+								<div class="projet-info-item">
+									<span class="projet-info-label">
+										<i class="bi bi-box-seam"></i>
+										Quantité
+									</span>
+									<span class="projet-info-value">{{ pr.quantiteTotale }} </span>
+								</div>
+								<div class="projet-info-item">
+									<span class="projet-info-label">
+										<i class="bi bi-ship"></i>
+										Navire
+									</span>
+									<span class="projet-info-value">{{ pr.nomNavire || 'Non défini' }}</span>
+								</div>
+								<div class="projet-info-item" *ngIf="pr.port">
+									<span class="projet-info-label">
+										<i class="bi bi-geo-alt"></i>
+										Port
+									</span>
+									<span class="projet-info-value">{{ pr.port }}</span>
+								</div>
+								<div class="projet-info-item" *ngIf="pr.dateDebut">
+									<span class="projet-info-label">
+										<i class="bi bi-calendar-check"></i>
+										Date début
+									</span>
+									<span class="projet-info-value">{{ pr.dateDebut | date: 'dd/MM/yyyy' }}</span>
+								</div>
+								<div class="projet-info-item" *ngIf="pr.dateFin">
+									<span class="projet-info-label">
+										<i class="bi bi-calendar-x"></i>
+										Date fin
+									</span>
+									<span class="projet-info-value">{{ pr.dateFin | date: 'dd/MM/yyyy' }}</span>
+								</div>
+							</div>
+							
+							<!-- Actions (Boutons en face avant - 2 boutons seulement) -->
+							<div class="projet-card-actions">
+								<button class="btn-action btn-edit" (click)="openEditProjetModal(pr); $event.stopPropagation()">
+									<i class="bi bi-pencil-fill"></i>
+									<span>Modifier</span>
+								</button>
+								<button class="btn-action btn-delete" (click)="openDeleteConfirmModal(pr); $event.stopPropagation()">
+									<i class="bi bi-trash-fill"></i>
+									<span>Supprimer</span>
+								</button>
+							</div>
+						</div>
+						
+						<!-- ========== FACE ARRIÈRE (DÉCLARATIONS + DATES) - Masquée car flip désactivé ========== -->
+						<div class="projet-card-back" style="display: none;">
+							<div class="back-header">
+								<h3>
+									<i class="bi bi-file-earmark-text"></i>
+									Informations détaillées
+								</h3>
+								<p>{{ pr.nomProduit }}</p>
+							</div>
+							
+							<div class="back-details">
+								<!-- Section Sociétés (petites cards, overflow si long) -->
+								<div class="back-section">
+									<h4 class="back-section-title">
+										<i class="bi bi-buildings"></i>
+										Sociétés
+									</h4>
+									<div class="societes-mini-cards">
+										<div class="societe-mini-card" *ngFor="let s of pr.societes">
+											<div class="mini-card-title"><i class="bi bi-building"></i> {{ s.nom }}</div>
+											<div class="mini-card-line" *ngIf="s.adresse"><span class="label">Adr:</span> <span class="value">{{ s.adresse }}</span></div>
+											<div class="mini-card-line" *ngIf="s.rcs"><span class="label">RCS:</span> <span class="value">{{ s.rcs }}</span></div>
+											<div class="mini-card-line" *ngIf="s.tva"><span class="label">TVA:</span> <span class="value">{{ s.tva }}</span></div>
+											<div class="mini-card-line" *ngIf="s.contact">
+												<span class="label">Contacts:</span>
+												<span class="value">
+													<ng-container *ngFor="let c of (parseContacts(s.contact)); let i = index">
+														<span class="contact-pill">{{ c }}</span>
+													</ng-container>
+												</span>
+											</div>
+										</div>
+										<div *ngIf="!pr.societes || pr.societes.length === 0" class="mini-card-empty">
+											Aucune société rattachée
+										</div>
+									</div>
+								</div>
+								<!-- Section Dates -->
+								<div class="back-section">
+									<h4 class="back-section-title">
+										<i class="bi bi-calendar-range"></i>
+										Dates du projet
+									</h4>
+									<div class="back-info-grid">
+										<div class="back-info-item" *ngIf="pr.dateDebut">
+											<span class="back-info-label">
+												<i class="bi bi-calendar-check"></i> Début
+											</span>
+											<span class="back-info-value">{{ pr.dateDebut | date: 'dd/MM/yyyy' }}</span>
+										</div>
+										<div class="back-info-item" *ngIf="pr.dateFin">
+											<span class="back-info-label">
+												<i class="bi bi-calendar-x"></i> Fin
+											</span>
+											<span class="back-info-value">{{ pr.dateFin | date: 'dd/MM/yyyy' }}</span>
+										</div>
+									</div>
+								</div>
+
+								<!-- Section Déclarations -->
+								<div class="back-section">
+									<h4 class="back-section-title">
+										<i class="bi bi-file-text"></i>
+										Déclarations ({{ getDeclarationsForProjet(pr.id).length }})
+									</h4>
+									
+									<!-- Liste des déclarations -->
+									<div *ngIf="getDeclarationsForProjet(pr.id).length > 0" class="declarations-list">
+										<div class="declaration-item" *ngFor="let decl of getDeclarationsForProjet(pr.id)">
+											<div class="declaration-header">
+												<i class="bi bi-file-earmark-check"></i>
+												<strong>{{ decl.numeroDeclaration }}</strong>
+											</div>
+											<div class="declaration-info">
+												<span class="declaration-label">Quantité:</span>
+												<span class="declaration-value">{{ decl.quantiteManifestee }} </span>
+											</div>
+										</div>
+									</div>
+									
+									<!-- Message si aucune déclaration -->
+									<div *ngIf="getDeclarationsForProjet(pr.id).length === 0" class="no-declarations">
+										<i class="bi bi-inbox"></i>
+										<p>Aucune déclaration</p>
+									</div>
+								</div>
+							</div>
+						</div>
+						
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Message si aucun projet -->
+		<div *ngIf="paginatedProjets.length === 0" class="row">
+			<div class="col-12">
+				<div class="no-data">
+					<i class="bi bi-inbox" style="font-size: 48px; opacity: 0.5;"></i>
+					<p style="margin: 0; font-size: 16px; font-weight: 500; color: #94a3b8;">Aucun projet trouvé</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- Pagination -->
+		<div class="pagination-container" *ngIf="filteredProjets.length > 0">
+			<div class="pagination-info">
+				Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredProjets.length) }} sur {{ filteredProjets.length }} projet(s)
+			</div>
+			<div class="pagination-controls">
+				<button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-double-left"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-left"></i>
+				</button>
+				<button 
+					*ngFor="let page of getPageNumbers()" 
+					class="page-btn" 
+					[class.active]="page === currentPage"
+					(click)="goToPage(page)"
+				>
+					{{ page }}
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-right"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-double-right"></i>
+				</button>
+			</div>
+		</div>
+
+		<!-- Modal Ajout Projet -->
+		<div class="modal fade" id="addProjetModal" tabindex="-1" aria-labelledby="addProjetModalLabel" aria-hidden="true">
+			<div class="modal-dialog modal-lg modal-dialog-scrollable">
+				<div class="modal-content modern-modal">
+					<div class="modal-header modern-header">
+						<div class="header-content">
+							<i class="bi bi-folder-plus header-icon"></i>
+							<h5 class="modal-title" id="addProjetModalLabel">Créer un nouveau projet</h5>
+						</div>
+						<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body modern-body">
+						<form id="addProjetForm" (ngSubmit)="addProjet(); closeAddProjetModal()" #addProjetFormRef="ngForm">
+							
+							<!-- Section Sociétés -->
+							<div class="form-section mb-4">
+								<label class="section-label">
+									<i class="bi bi-building-fill"></i>
+									<span>Sociétés</span>
+									<span class="required-badge">Requis</span>
+								</label>
+								
+								<!-- Message si aucune société sélectionnée -->
+								<div *ngIf="selectedSocietes.length === 0" class="empty-selection-message mb-3">
+									<i class="bi bi-info-circle"></i>
+									<span>Aucune société sélectionnée. Recherchez ou créez une société ci-dessous.</span>
+								</div>
+								
+								<!-- Sociétés sélectionnées -->
+								<div *ngIf="selectedSocietes.length > 0" class="selected-items-container mb-3">
+									<div class="selected-items-header mb-2">
+										<i class="bi bi-check-circle-fill"></i>
+										<span>Sociétés sélectionnées ({{ selectedSocietes.length }})</span>
+									</div>
+									<div class="selected-items-grid">
+										<div *ngFor="let societe of selectedSocietes" class="selected-item-chip">
+											<i class="bi bi-building-fill-check"></i>
+											<span>{{ societe.nom }}</span>
+											<button type="button" class="remove-chip-btn" (click)="removeSociete(societe.nom)" aria-label="Supprimer">
+												<i class="bi bi-x-lg"></i>
+											</button>
+										</div>
+									</div>
+								</div>
+								
+								<!-- Input de recherche de société -->
+								<div class="form-group">
+									<label class="form-label">
+										<i class="bi bi-search"></i> Rechercher ou créer une société
+									</label>
+									<div class="search-input-container" [class.dropdown-open]="showSocieteDropdown" style="position: relative;">
+										<input 
+											type="text"
+											[(ngModel)]="societeSearchInput" 
+											(input)="onSocieteSearchInput()"
+											(focus)="onSocieteSearchInput()"
+											(keydown.enter)="$event.preventDefault(); addSocieteFromSearch()"
+											name="societeSearch"
+											class="form-control modern-input search-with-icon" 
+											placeholder="Tapez pour rechercher ou créer une société..."
+											autocomplete="off"
+										/>
+										<i class="bi bi-search search-icon-input"></i>
+										
+										<!-- Dropdown des résultats de recherche -->
+										<div *ngIf="showSocieteDropdown && filteredSocietes.length > 0" 
+											 class="search-dropdown">
+											<div class="dropdown-header">
+												<i class="bi bi-building"></i>
+												<span>Sociétés trouvées</span>
+											</div>
+											<div *ngFor="let societe of filteredSocietes" 
+												 class="dropdown-item"
+												 (click)="selectSociete(societe)">
+												<div class="dropdown-item-content">
+													<i class="bi bi-building-fill"></i>
+													<span>{{ societe.nom }}</span>
+												</div>
+												<i class="bi bi-arrow-return-left dropdown-item-icon"></i>
+											</div>
+										</div>
+										
+										<!-- Message "Créer nouvelle société" -->
+										<div *ngIf="showSocieteDropdown && filteredSocietes.length === 0 && societeSearchInput.trim()" 
+											 class="search-dropdown create-new-dropdown">
+											<div class="create-new-content">
+												<div class="create-new-icon">
+													<i class="bi bi-plus-circle-fill"></i>
+												</div>
+												<div class="create-new-text">
+													<div class="create-new-title">Aucune société trouvée</div>
+													<div class="create-new-subtitle">✨ Créer "<strong>{{ societeSearchInput }}</strong>"</div>
+												</div>
+											</div>
+											<button 
+												type="button"
+												class="btn-create-from-search" 
+												(click)="addSocieteFromSearch()">
+												<i class="bi bi-plus-circle-fill"></i>
+												<span>Créer et ajouter</span>
+											</button>
+											<div class="create-new-hint">
+												<i class="bi bi-lightbulb"></i>
+												Ou appuyez sur <kbd>Entrée</kbd>
+											</div>
+										</div>
+										
+										<!-- Formulaire inline pour créer une nouvelle société -->
+										<div *ngIf="showNewSocieteForm" class="new-societe-inline-panel">
+											<div class="new-societe-header mb-3">
+												<i class="bi bi-building-fill-add"></i>
+												<h6 class="mb-0">Nouvelle société</h6>
+											</div>
+											<div class="row g-3">
+												<!-- Ligne 1 : Nom et Adresse -->
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-building"></i> Nom *</label>
+													<input [(ngModel)]="newSociete.nom" name="nsNom" class="form-control modern-input" placeholder="Nom de la société" />
+												</div>
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-geo-alt"></i> Adresse</label>
+													<input [(ngModel)]="newSociete.adresse" name="nsAdr" class="form-control modern-input" placeholder="Adresse complète" />
+												</div>
+												<!-- Ligne 2 : RCS et TVA -->
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-file-text"></i> RCS</label>
+													<input [(ngModel)]="newSociete.rcs" name="nsRcs" class="form-control modern-input" placeholder="N° RCS" />
+												</div>
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-receipt"></i> TVA</label>
+													<input [(ngModel)]="newSociete.tva" name="nsTva" class="form-control modern-input" placeholder="N° TVA" />
+												</div>
+												<div class="col-12">
+													<label class="form-label"><i class="bi bi-telephone"></i> Contacts</label>
+													<div class="contacts-editor">
+														<div class="contact-item" *ngFor="let c of newSocieteContacts; let i = index; trackBy: trackByIndex">
+															<input 
+																type="tel" 
+																[(ngModel)]="newSocieteContacts[i]" 
+																[name]="'nsContact' + i" 
+																class="form-control modern-input" 
+																placeholder="Ex: +33 6 12 34 56 78" 
+															/>
+															<button type="button" class="btn btn-sm btn-danger" (click)="newSocieteContacts.splice(i,1)">
+																<i class="bi bi-x"></i>
+															</button>
+														</div>
+														<button type="button" class="btn btn-sm btn-secondary" (click)="newSocieteContacts.push('')">
+															<i class="bi bi-plus"></i> Ajouter un contact
+														</button>
+													</div>
+												</div>
+												<div class="col-12 d-flex gap-2 mt-2">
+													<button type="button" class="btn btn-success" (click)="confirmAddNewSociete()"><i class="bi bi-check"></i> Ajouter</button>
+													<button type="button" class="btn btn-outline-secondary" (click)="cancelAddNewSociete()"><i class="bi bi-x"></i> Annuler</button>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+								
+								<small class="form-text text-muted mt-2" style="display: block;">
+									<i class="bi bi-info-circle"></i> Tapez pour rechercher une société existante ou créer une nouvelle
+								</small>
+							</div>
+							
+							<!-- Section Informations du projet -->
+							<div class="form-section mb-4">
+								<label class="section-label">
+									<i class="bi bi-info-circle-fill"></i>
+									<span>Informations générales</span>
+								</label>
+								
+								<div class="row g-3">
+									<div class="col-md-6">
+										<div class="form-group">
+											<label class="form-label">
+												<i class="bi bi-box-seam"></i> Produit
+												<span class="text-danger">*</span>
+											</label>
+											<input 
+												[(ngModel)]="newProjet.nomProduit" 
+												name="nomProduit" 
+												class="form-control modern-input" 
+												placeholder="Ex: Céréales, Phosphate..."
+												required 
+												minlength="1"/>
+											<small class="text-muted" *ngIf="!newProjet.nomProduit || newProjet.nomProduit.trim() === ''">
+												<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+											</small>
+										</div>
+									</div>
+									
+									<div class="col-md-6">
+										<div class="form-group">
+											<label class="form-label">
+												<i class="bi bi-geo-alt-fill"></i> Port
+												<span class="text-danger">*</span>
+											</label>
+											<input 
+												[(ngModel)]="newProjet.port" 
+												name="port" 
+												class="form-control modern-input" 
+												placeholder="Ex: Port de Tunis"
+												required 
+												minlength="1"/>
+											<small class="text-muted" *ngIf="!newProjet.port || newProjet.port.trim() === ''">
+												<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+											</small>
+										</div>
+									</div>
+									
+									<div class="col-md-6">
+										<div class="form-group">
+											<label class="form-label">
+												<i class="bi bi-truck-front"></i> Navire
+												<span class="text-danger">*</span>
+											</label>
+											<input 
+												[(ngModel)]="newProjet.nomNavire" 
+												name="nomNavire" 
+												class="form-control modern-input" 
+												placeholder="Nom du navire"
+												required 
+												minlength="1"/>
+											<small class="text-muted" *ngIf="!newProjet.nomNavire || newProjet.nomNavire.trim() === ''">
+												<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+											</small>
+										</div>
+									</div>
+									
+									<div class="col-md-6">
+										<div class="form-group">
+											<label class="form-label">
+												<i class="bi bi-calculator"></i> Quantité totale
+												<span class="text-danger">*</span>
+											</label>
+											<input 
+												[(ngModel)]="newProjet.quantiteTotale" 
+												name="quantiteTotale" 
+												type="number" 
+												step="100"
+												min="0"
+												class="form-control modern-input" 
+												placeholder="Ex: 1000"
+												required />
+											<small class="text-muted" *ngIf="!newProjet.quantiteTotale || newProjet.quantiteTotale <= 0">
+												<i class="bi bi-exclamation-circle text-danger"></i> La quantité doit être supérieure à 0
+											</small>
+										</div>
+									</div>
+								</div>
+							</div>
+														<!-- Section Déclarations -->
+							<div class="form-section mb-4">
+								<label class="section-label">
+									<i class="bi bi-file-earmark-text-fill"></i>
+									<span>Déclarations</span>
+								</label>
+								
+								<div *ngFor="let declaration of declarations; let i = index" class="declaration-card mb-3">
+									<div class="declaration-card-header">
+										<span><i class="bi bi-file-text"></i> Déclaration #{{ i + 1 }}</span>
+										<button 
+											*ngIf="declarations.length > 1" 
+											type="button" 
+											class="btn-remove-declaration" 
+											(click)="supprimerDeclaration(i)"
+											title="Supprimer">
+											<i class="bi bi-trash3"></i>
+										</button>
+									</div>
+									<div class="declaration-card-body">
+										<div class="row g-3">
+											<div class="col-md-6">
+												<div class="form-group">
+													<label class="form-label">
+														<i class="bi bi-hash"></i> Numéro de déclaration
+													</label>
+													<input 
+														[(ngModel)]="declaration.numeroDeclaration" 
+														[name]="'numDeclaration' + i" 
+														type="text" 
+														class="form-control modern-input" 
+														placeholder="Ex: DEC-2024-001" />
+												</div>
+											</div>
+											<div class="col-md-6">
+												<div class="form-group">
+													<label class="form-label">
+														<i class="bi bi-calculator"></i> Quantité 
+													</label>
+													<input 
+														[(ngModel)]="declaration.quantiteManifestee" 
+														[name]="'quantiteDeclaration' + i" 
+														type="number" 
+														step="0.01"
+														min="0"
+														class="form-control modern-input" 
+														placeholder="Ex: 1500.50" />
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
+								
+								<button type="button" class="btn-add-declaration" (click)="ajouterDeclaration()">
+									<i class="bi bi-plus-circle-fill"></i>
+									<span>Ajouter une déclaration</span>
+								</button>
+							</div>
+							<!-- Section Dates -->
+							<div class="form-section mb-4">
+								<label class="section-label">
+									<i class="bi bi-calendar-range"></i>
+									<span>Période du projet</span>
+								</label>
+								
+								<div class="row g-3">
+									<div class="col-md-12">
+										<div class="form-group">
+											<label class="form-label">
+												<i class="bi bi-calendar-x"></i> Date de fin
+											</label>
+											<input 
+												[(ngModel)]="newProjet.dateFin" 
+												name="dateFin" 
+												type="date" 
+												class="form-control modern-input" />
+										</div>
+										<div *ngIf="isAddDateInvalid()" class="alert alert-warning py-2 px-3 mt-2">
+											<i class="bi bi-exclamation-triangle-fill me-2"></i>
+											La date de fin doit être strictement supérieure à la date de début.
+										</div>
+										<small class="form-text text-muted mt-1" style="display: block;">
+											<i class="bi bi-info-circle"></i> La date de début est automatiquement définie à la date actuelle
+										</small>
+									</div>
+								</div>
+							</div>
+							
+
+							
+							<!-- Section Statut -->
+							<div class="form-section">
+								<div class="form-check form-switch modern-switch">
+									<input 
+										class="form-check-input" 
+										type="checkbox" 
+										id="active" 
+										[(ngModel)]="newProjet.active" 
+										name="active">
+									<label class="form-check-label" for="active">
+										<i class="bi bi-check-circle-fill"></i>
+										<span>Projet actif</span>
+									</label>
+								</div>
+							</div>
+							
+						</form>
+					</div>
+					<div class="modal-footer modern-footer">
+						<button type="button" class="btn-cancel-modal" data-bs-dismiss="modal">
+							<i class="bi bi-x-circle"></i>
+							<span>Annuler</span>
+						</button>
+			<button type="submit" form="addProjetForm" class="btn-submit-modal"
+				[disabled]="!isAddFormValid()">
+							<i class="bi bi-check-circle-fill"></i>
+							<span>Créer le projet</span>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Modal Edition Projet -->
+		<div class="modal fade" id="editProjetModal" tabindex="-1" aria-labelledby="editProjetModalLabel" aria-hidden="true">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header bg-primary text-white">
+						<h5 class="modal-title" id="editProjetModalLabel">Modifier le projet</h5>
+						<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body">
+						<form (ngSubmit)="updateProjet(); closeEditProjetModal()" *ngIf="selectedProjet" #editProjetForm="ngForm">
+							<!-- Recherche intelligente de sociétés -->
+							<div class="mb-3">
+								<label class="form-label fw-bold">
+									<i class="bi bi-building"></i> Sociétés *
+								</label>
+								
+								<!-- Afficher les sociétés sélectionnées -->
+								<div *ngIf="selectedSocietes.length > 0" class="mb-2">
+									<div class="d-flex flex-wrap gap-2">
+										<span *ngFor="let societe of selectedSocietes" class="badge bg-primary d-flex align-items-center gap-2" style="font-size: 13px; padding: 8px 12px;">
+											<i class="bi bi-building-fill"></i>
+											{{ societe.nom }}
+											<button type="button" class="btn-close btn-close-white" (click)="removeSociete(societe.nom)" style="font-size: 10px; padding: 0; width: 14px; height: 14px;" aria-label="Supprimer"></button>
+										</span>
+									</div>
+								</div>
+								
+								<!-- Champ de recherche -->
+								<div class="societe-search-container" style="position: relative;">
+									<input 
+										[(ngModel)]="societeSearchInput" 
+										(input)="onSocieteSearchInput()"
+										(focus)="onSocieteSearchInput()"
+										(keydown.enter)="$event.preventDefault(); addSocieteFromSearch()"
+										name="editSocieteSearch"
+										class="form-control" 
+										placeholder="Rechercher ou créer une société..." 
+										autocomplete="off"
+									/>
+									
+									<!-- Dropdown des sociétés -->
+									<div *ngIf="showSocieteDropdown && filteredSocietes.length > 0" 
+										 (mousedown)="$event.preventDefault()"
+										 style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); max-height: 250px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+										<div *ngFor="let societe of filteredSocietes" 
+											 (mousedown)="selectSociete(societe)"
+											 style="padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background 0.2s;"
+											 onmouseover="this.style.background='#f8fafc'" 
+											 onmouseout="this.style.background='white'">
+											<div style="display: flex; align-items: center; gap: 10px;">
+												<i class="bi bi-building-fill" style="color: #667eea; font-size: 18px;"></i>
+												<div style="flex: 1;">
+													<div style="font-weight: 500; color: #1e293b;">{{ societe.nom }}</div>
+												</div>
+												<i class="bi bi-arrow-return-left" style="color: #cbd5e1;"></i>
+											</div>
+										</div>
+									</div>
+									
+									<!-- Message "Créer une nouvelle société" pour ÉDITION -->
+							 <div *ngIf="showSocieteDropdown && filteredSocietes.length === 0 && societeSearchInput.trim()" 
+										 class="search-dropdown create-new-dropdown">
+										<div class="create-new-content">
+											<div class="create-new-icon">
+												<i class="bi bi-plus-circle-fill"></i>
+											</div>
+											<div class="create-new-text">
+												<div class="create-new-title">Aucune société trouvée</div>
+												<div class="create-new-subtitle">✨ Créer "<strong>{{ societeSearchInput }}</strong>"</div>
+											</div>
+										</div>
+										<button 
+											type="button"
+											(mousedown)="addSocieteFromSearch()" 
+											class="btn-create-from-search">
+											<i class="bi bi-plus-circle-fill"></i>
+											<span>Créer et ajouter</span>
+										</button>
+										<div class="create-new-hint">
+											<i class="bi bi-lightbulb"></i>
+											Ou appuyez sur <kbd>Entrée</kbd>
+										</div>
+									</div>
+								</div>
+								
+								<!-- Formulaire inline pour créer une nouvelle société dans l'édition -->
+								<div *ngIf="showNewSocieteForm" class="new-societe-inline-panel mt-3">
+									<div class="new-societe-header mb-3">
+										<i class="bi bi-building-fill-add"></i>
+										<h6 class="mb-0">Nouvelle société</h6>
+									</div>
+									<div class="row g-3">
+										<!-- Ligne 1 : Nom et Adresse -->
+										<div class="col-md-6">
+											<label class="form-label"><i class="bi bi-building"></i> Nom *</label>
+											<input [(ngModel)]="newSociete.nom" name="editNsNom" class="form-control modern-input" placeholder="Nom de la société" />
+										</div>
+										<div class="col-md-6">
+											<label class="form-label"><i class="bi bi-geo-alt"></i> Adresse</label>
+											<input [(ngModel)]="newSociete.adresse" name="editNsAdr" class="form-control modern-input" placeholder="Adresse complète" />
+										</div>
+										<!-- Ligne 2 : RCS et TVA -->
+										<div class="col-md-6">
+											<label class="form-label"><i class="bi bi-file-text"></i> RCS</label>
+											<input [(ngModel)]="newSociete.rcs" name="editNsRcs" class="form-control modern-input" placeholder="N° RCS" />
+										</div>
+										<div class="col-md-6">
+											<label class="form-label"><i class="bi bi-receipt"></i> TVA</label>
+											<input [(ngModel)]="newSociete.tva" name="editNsTva" class="form-control modern-input" placeholder="N° TVA" />
+										</div>
+										<div class="col-12">
+											<label class="form-label"><i class="bi bi-telephone"></i> Contacts</label>
+											<div class="contacts-editor">
+												<div class="contact-item" *ngFor="let c of newSocieteContacts; let i = index; trackBy: trackByIndex">
+													<input 
+														type="tel" 
+														[(ngModel)]="newSocieteContacts[i]" 
+														[name]="'editNsContact' + i" 
+														class="form-control modern-input" 
+														placeholder="Ex: +33 6 12 34 56 78" 
+													/>
+													<button type="button" class="btn btn-sm btn-danger" (click)="newSocieteContacts.splice(i,1)">
+														<i class="bi bi-x"></i>
+													</button>
+												</div>
+												<button type="button" class="btn btn-sm btn-secondary" (click)="newSocieteContacts.push('')">
+													<i class="bi bi-plus"></i> Ajouter un contact
+												</button>
+											</div>
+										</div>
+										<div class="col-12 d-flex gap-2 mt-2">
+											<button type="button" class="btn btn-success" (click)="confirmAddNewSociete()"><i class="bi bi-check"></i> Ajouter</button>
+											<button type="button" class="btn btn-outline-secondary" (click)="cancelAddNewSociete()"><i class="bi bi-x"></i> Annuler</button>
+										</div>
+									</div>
+								</div>
+
+								<!-- Édition détaillée des sociétés sélectionnées -->
+								<div class="societes-edit-blocks" *ngIf="selectedSocietes.length > 0">
+										<div class="societe-edit-card" *ngFor="let s of selectedSocietes; let i = index">
+											<div class="row g-3">
+												<!-- Ligne 1 : Nom et Adresse -->
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-building"></i> Nom *</label>
+													<input [(ngModel)]="s.nom" [name]="'esNom' + i" class="form-control" placeholder="Nom de la société" />
+												</div>
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-geo-alt"></i> Adresse</label>
+													<input [(ngModel)]="s.adresse" [name]="'esAdr' + i" class="form-control" placeholder="Adresse complète" />
+												</div>
+												<!-- Ligne 2 : RCS et TVA -->
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-file-text"></i> RCS</label>
+													<input [(ngModel)]="s.rcs" [name]="'esRcs' + i" class="form-control" placeholder="N° RCS" />
+												</div>
+												<div class="col-md-6">
+													<label class="form-label"><i class="bi bi-receipt"></i> TVA</label>
+													<input [(ngModel)]="s.tva" [name]="'esTva' + i" class="form-control" placeholder="N° TVA" />
+												</div>
+												<div class="col-12">
+													<label class="form-label"><i class="bi bi-telephone"></i> Contacts</label>
+													<div class="contacts-editor">
+														<div class="contact-item" *ngFor="let c of getContactsArray(s); let j = index; trackBy: trackByIndex">
+															<input 
+																type="tel" 
+																[(ngModel)]="getContactsArray(s)[j]" 
+																[name]="'esContact' + i + '_' + j" 
+																class="form-control" 
+																placeholder="Ex: +33 6 12 34 56 78" 
+															/>
+															<button type="button" class="btn btn-sm btn-danger" (click)="removeContactFromSociete(s, j)">
+																<i class="bi bi-x"></i>
+															</button>
+														</div>
+														<button type="button" class="btn btn-sm btn-secondary" (click)="addContactToSociete(s)">
+															<i class="bi bi-plus"></i> Ajouter un contact
+														</button>
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								
+								<small class="form-text text-muted mt-2" style="display: block;">
+									<i class="bi bi-lightbulb"></i> Tapez pour rechercher une société existante ou créer une nouvelle. Appuyez sur Entrée pour ajouter.
+								</small>
+							</div>
+							
+							<div class="mb-3">
+								<label for="editNomProduit" class="form-label">
+									<i class="bi bi-box-seam"></i> Produit
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.nomProduit" 
+									name="editNomProduit" 
+									id="editNomProduit" 
+									class="form-control" 
+									placeholder="Ex: Céréales, Phosphate..."
+									required 
+									minlength="1"/>
+								<small class="text-muted" *ngIf="!selectedProjet.nomProduit || selectedProjet.nomProduit.trim() === ''">
+									<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+								</small>
+							</div>
+							<div class="mb-3">
+								<label for="editQuantiteTotale" class="form-label">
+									<i class="bi bi-calculator"></i> Quantité
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.quantiteTotale" 
+									name="editQuantiteTotale" 
+									id="editQuantiteTotale" 
+									type="number" 
+									step="0.01"
+									min="0.01"
+									class="form-control" 
+									placeholder="Ex: 1000"
+									required />
+								<small class="text-muted" *ngIf="!selectedProjet.quantiteTotale || selectedProjet.quantiteTotale <= 0">
+									<i class="bi bi-exclamation-circle text-danger"></i> La quantité doit être supérieure à 0
+								</small>
+							</div>
+							<div class="mb-3">
+								<label for="editNomNavire" class="form-label">
+									<i class="bi bi-truck-front"></i> Navire
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.nomNavire" 
+									name="editNomNavire" 
+									id="editNomNavire" 
+									class="form-control" 
+									placeholder="Nom du navire"
+									required 
+									minlength="1"/>
+								<small class="text-muted" *ngIf="!selectedProjet.nomNavire || selectedProjet.nomNavire.trim() === ''">
+									<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+								</small>
+							</div>
+							<!-- <div class="mb-3">
+								<label for="editPaysNavire" class="form-label">Pays</label>
+								<input [(ngModel)]="selectedProjet.paysNavire" name="editPaysNavire" id="editPaysNavire" class="form-control" />
+							</div>
+							<div class="mb-3">
+								<label for="editEtat" class="form-label">Etat</label>
+								<input [(ngModel)]="selectedProjet.etat" name="editEtat" id="editEtat" class="form-control" />
+							</div> -->
+							<div class="mb-3">
+								<label for="editPort" class="form-label">
+									<i class="bi bi-geo-alt-fill"></i> Port
+									<span class="text-danger">*</span>
+								</label>
+								<input 
+									[(ngModel)]="selectedProjet.port" 
+									name="editPort" 
+									id="editPort" 
+									class="form-control" 
+									placeholder="Ex: Port de Tunis" 
+									required 
+									minlength="1"/>
+								<small class="text-muted" *ngIf="!selectedProjet.port || selectedProjet.port.trim() === ''">
+									<i class="bi bi-exclamation-circle text-danger"></i> Ce champ est obligatoire
+								</small>
+							</div>
+							<div class="mb-3">
+								<label for="editDateDebut" class="form-label">Date début</label>
+								<input [(ngModel)]="selectedProjet.dateDebut" name="editDateDebut" id="editDateDebut" type="date" class="form-control" />
+							</div>
+							<div class="mb-3">
+								<label for="editDateFin" class="form-label">Date fin</label>
+								<input [(ngModel)]="selectedProjet.dateFin" name="editDateFin" id="editDateFin" type="date" class="form-control" />
+								<div *ngIf="isEditDateInvalid()" class="alert alert-warning py-2 px-3 mt-2">
+									<i class="bi bi-exclamation-triangle-fill me-2"></i>
+									La date de fin doit être strictement supérieure à la date de début.
+								</div>
+							</div>
+							<div class="form-check form-switch mb-3">
+								<input class="form-check-input" type="checkbox" id="editActive" [(ngModel)]="selectedProjet.active" name="editActive">
+								<label class="form-check-label" for="editActive">Projet actif</label>
+							</div>
+							<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+				<button type="submit" class="btn btn-primary" [disabled]="!isEditFormValid()">Enregistrer</button>
+							</div>
+						</form>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Modal Confirmation Suppression Projet -->
+		<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+			<div class="modal-dialog modal-dialog-centered">
+				<div class="modal-content" style="border: none; border-radius: 16px; overflow: hidden;">
+					<div class="modal-header" style="background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); color: white; border: none; padding: 24px;">
+						<div style="display: flex; align-items: center; gap: 12px;">
+							<i class="bi bi-exclamation-triangle-fill" style="font-size: 28px;"></i>
+							<h5 class="modal-title" id="deleteConfirmModalLabel" style="margin: 0; font-weight: 700;">Confirmer la suppression</h5>
+						</div>
+						<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+					</div>
+					<div class="modal-body" style="padding: 30px;">
+						<p style="font-size: 16px; margin-bottom: 20px;">
+							Voulez-vous vraiment supprimer le projet
+							<strong style="color: #dc2626;">« {{ selectedProjet?.nomProduit || ('Projet ' + (selectedProjet?.id || '')) }} »</strong> ?
+						</p>
+						
+						<div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 16px; border-radius: 12px; border-left: 4px solid #f59e0b; margin-bottom: 16px;">
+							<div style="display: flex; align-items: start; gap: 12px;">
+								<i class="bi bi-exclamation-triangle-fill" style="color: #f59e0b; font-size: 20px; flex-shrink: 0;"></i>
+								<div>
+									<p style="margin: 0; font-weight: 600; color: #92400e; font-size: 14px;">⚠️ Attention</p>
+									<p style="margin: 4px 0 0 0; font-size: 13px; color: #78350f;">
+										Cette action est <strong>irréversible</strong>. Le projet et toutes ses données associées seront définitivement supprimés.
+									</p>
+								</div>
+							</div>
+						</div>
+						
+						<div style="background: #f3f4f6; padding: 16px; border-radius: 12px; border-left: 4px solid #6b7280;">
+							<div style="display: flex; align-items: start; gap: 12px;">
+								<i class="bi bi-info-circle-fill" style="color: #6b7280; font-size: 18px; flex-shrink: 0;"></i>
+								<div>
+									<p style="margin: 0; font-weight: 600; color: #374151; font-size: 13px;">ℹ️ Information</p>
+									<p style="margin: 4px 0 0 0; font-size: 12px; color: #4b5563;">
+										Si le projet contient des <strong>voyages</strong>, <strong>chargements</strong> ou <strong>déchargements</strong>, 
+										vous devrez d'abord les supprimer avant de pouvoir supprimer le projet.
+									</p>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="modal-footer" style="border: none; padding: 20px 30px; background: #f9fafb;">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal" style="padding: 10px 24px; border-radius: 10px; font-weight: 600;">
+							<i class="bi bi-x-lg"></i>
+							Annuler
+						</button>
+						<button type="button" class="btn btn-danger" (click)="deleteProjet(selectedProjet?.id)" 
+								style="padding: 10px 24px; border-radius: 10px; font-weight: 600; background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); border: none;">
+							<i class="bi bi-trash-fill"></i>
+							Supprimer définitivement
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</main>
+</div>

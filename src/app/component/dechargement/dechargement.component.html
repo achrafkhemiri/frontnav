@@ -1,0 +1,813 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+
+  <main class="content">
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-header-content">
+        <div class="page-icon">
+          <i class="bi bi-box-arrow-down"></i>
+        </div>
+        <div class="page-title-section">
+          <h1 class="page-title">Bons des Chargements</h1>
+          <!-- Si un projet est actif, afficher ses détails même sans données -->
+          <p class="page-subtitle badges-row" *ngIf="projetActif; else dechAggregates">
+            <span class="info-badge" *ngIf="projetActif?.nomNavire">
+              <i class="bi bi-truck-front"></i>
+              <span class="badge-label">Navire</span>
+              <span class="badge-value">{{ projetActif?.nomNavire }}</span>
+            </span>
+            <span class="info-badge" *ngIf="projetActif?.port">
+              <i class="bi bi-geo-alt"></i>
+              <span class="badge-label">Port</span>
+              <span class="badge-value">{{ projetActif?.port }}</span>
+            </span>
+            <span class="info-badge" *ngIf="projetActif?.nomProduit">
+              <i class="bi bi-box"></i>
+              <span class="badge-label">Produit</span>
+              <span class="badge-value">{{ projetActif?.nomProduit }}</span>
+            </span>
+            <span class="info-badge" *ngIf="societesList.length">
+              <i class="bi bi-buildings"></i>
+              <span class="badge-label">Sociétés</span>
+              <span class="badge-value">{{ societesList.join(', ') }}</span>
+            </span>
+          </p>
+          <!-- Sinon, fallback aux agrégats calculés -->
+          <ng-template #dechAggregates>
+            <p class="page-subtitle badges-row">
+              <span class="info-badge" *ngIf="allPorts.length > 0"><i class="bi bi-geo-alt"></i> <span class="badge-label">Ports</span> <span class="badge-value">{{ allPorts.join(', ') }}</span></span>
+              <span class="info-badge" *ngIf="allProjets.length > 0"><i class="bi bi-folder"></i> <span class="badge-label">Projets</span> <span class="badge-value">{{ allProjets.join(', ') }}</span></span>
+              <span *ngIf="allProjets.length === 0 && allPorts.length === 0">Consultation et suivi des déchargements effectués</span>
+            </p>
+          </ng-template>
+        </div>
+      </div>
+      <div class="page-actions">
+        <button class="action-button export-btn" (click)="exportToExcel()">
+          <i class="bi bi-file-earmark-excel"></i>
+          <span>Exporter</span>
+        </button>
+        <button class="action-button print-btn" (click)="exportToPDF()">
+          <i class="bi bi-file-earmark-pdf"></i>
+          <span>PDF</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Error Message -->
+    <div *ngIf="error" class="error-message">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span>{{ error }}</span>
+    </div>
+
+    <!-- Filters Section -->
+    <div class="filters-section">
+      <div class="filter-buttons">
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'all'"
+          (click)="setFilter('all')"
+        >
+          <i class="bi bi-grid-fill"></i>
+          <span>Tous</span>
+          <span class="badge">{{ allDechargementsCount }}</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'date'"
+          (click)="setFilter('date')"
+        >
+          <i class="bi bi-calendar-check"></i>
+          <span>Par Date</span>
+        </button>
+        <button 
+          class="filter-btn" 
+          [class.active]="activeFilter === 'societeP'"
+          (click)="setFilter('societeP')"
+        >
+          <i class="bi bi-buildings"></i>
+          <span>Par Société </span>
+        </button>
+      </div>
+
+      <!-- Filter Details -->
+      <div *ngIf="activeFilter === 'date'" class="filter-details">
+        <div class="date-filter-card">
+          <div class="date-input-group">
+            <label class="date-filter-label">
+              <i class="bi bi-calendar-event"></i>
+              Sélectionner une plage de dates
+            </label>
+            <div class="date-row" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 200px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+                  Date début
+                </label>
+                <input 
+                  type="date" 
+                  [(ngModel)]="dateDebut" 
+                  (change)="applyFilter()"
+                  [max]="today"
+                  class="date-input"
+                />
+              </div>
+              <div style="flex: 1; min-width: 200px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+                  Date fin
+                </label>
+                <input 
+                  type="date" 
+                  [(ngModel)]="dateFin" 
+                  (change)="applyFilter()"
+                  [max]="today"
+                  class="date-input"
+                />
+              </div>
+              <button 
+                *ngIf="dateDebut || dateFin"
+                class="clear-filter-btn" 
+                (click)="clearFilter('date')"
+                style="align-self: flex-end;">
+                <i class="bi bi-x-circle"></i>
+                Effacer
+              </button>
+            </div>
+          </div>
+          <div *ngIf="dateDebut || dateFin" class="filter-info-message">
+            <i class="bi bi-info-circle-fill"></i>
+            <span>
+              <strong>Journée de travail :</strong> Les déchargements incluent ceux effectués de <strong>7h00</strong> le matin jusqu'à <strong>6h00</strong> le lendemain
+              <span *ngIf="dateDebut && dateFin">, du <strong>{{ dateDebut }}</strong> au <strong>{{ dateFin }}</strong></span>
+              <span *ngIf="dateDebut && !dateFin">, à partir du <strong>{{ dateDebut }}</strong></span>
+              <span *ngIf="!dateDebut && dateFin">, jusqu'au <strong>{{ dateFin }}</strong></span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div *ngIf="activeFilter === 'societeP'" class="filter-details">
+        <label>
+          <i class="bi bi-buildings"></i> Sélectionner une société 
+        </label>
+        <select 
+          [(ngModel)]="selectedSocieteP" 
+          (change)="applyFilter()">
+          <option [ngValue]="null">-- Toutes les sociétés  --</option>
+          <option *ngFor="let s of allSocietesP" [ngValue]="s">
+            {{ s }}
+          </option>
+        </select>
+          <button class="btn btn-link" (click)="clearFilter('societeP')">Effacer</button>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="Rechercher par ticket, bon de livraison, client, dépôt..." 
+          [(ngModel)]="searchFilter" 
+          (input)="applyFilter()"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredDechargements.length }} résultat(s)</span>
+        <div class="page-size-selector">
+          <span>Afficher</span>
+          <select [(ngModel)]="pageSize" (change)="changePageSize()" class="page-size-select">
+            <option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+          </select>
+          <span>lignes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th (click)="sortBy('dateDechargement')" class="sortable date-column">
+              <span class="th-content">
+                Date 
+                <i class="bi sort-icon" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'dateDechargement' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'dateDechargement' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'dateDechargement'
+                }"></i>
+              </span>
+            </th>
+            <th (click)="sortBy('numTicket')" class="sortable">
+              <span class="th-content">
+                N° Ticket
+                <i class="bi sort-icon" [ngClass]="{
+                  'bi-chevron-down': sortColumn === 'numTicket' && sortDirection === 'desc',
+                  'bi-chevron-up': sortColumn === 'numTicket' && sortDirection === 'asc',
+                  'bi-chevron-expand': sortColumn !== 'numTicket'
+                }"></i>
+              </span>
+            </th>
+            <th>N° Bon<br>Livraison</th>
+            <th>Société</th>
+            <th>Transporteur</th>
+            <th>Client</th>
+            <th>Dépôt</th>
+            <th>Poids Tare</th>
+            <th>Poids Brut</th>
+            <th>Poids Net (Autorisation)</th>
+            <th class="actions-column">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let dech of paginatedDechargements">
+            <td class="date-cell">
+              <div class="date-line">{{ formatDateOnly(dech.dateDechargement) }}</div>
+              <div class="time-line">{{ formatTimeOnly(dech.dateDechargement) }}</div>
+            </td>
+            <td><span class="badge badge-info">{{ dech.numTicket }}</span></td>
+            <td>{{ dech.numBonLivraison || '-' }}</td>
+            <td>
+              <span class="badge badge-primary">
+                {{ getSocieteP(dech) }}
+              </span>
+            </td>
+            <td>{{ dech.societe || '-' }}</td>
+            <td>
+              <span *ngIf="dech.clientId" class="badge badge-success">
+                {{ getClientName(dech.clientId) }}
+              </span>
+              <span *ngIf="!dech.clientId">-</span>
+            </td>
+            <td>
+              <span *ngIf="dech.depotId" class="badge badge-warning">
+                {{ getDepotName(dech.depotId) }}
+              </span>
+              <span *ngIf="!dech.depotId">-</span>
+            </td>
+            <td>{{ dech.poidCamionVide?.toFixed(0) }}</td>
+            <td>{{ dech.poidComplet?.toFixed(0) }}</td>
+            <td>
+              <strong style="color: #667eea;">
+                {{ calculatePoidsNet(dech).toFixed(0) }}
+                <span *ngIf="dech.autorisationCode" style="font-weight: 600; color: #475569; margin-left: 8px;">({{ dech.autorisationCode }})</span>
+              </strong>
+            </td>
+            <td class="actions-cell">
+              <div class="action-buttons">
+                <button class="action-btn edit-btn" (click)="editDechargement(dech)" title="Modifier">
+                  <i class="bi bi-pencil-square"></i>
+                </button>
+                <button class="action-btn print-btn" (click)="printDechargement(dech)" title="Imprimer">
+                  <i class="bi bi-printer"></i>
+                </button>
+                <button class="action-btn delete-btn" (click)="openDeleteDialog(dech)" title="Supprimer">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          <tr *ngIf="paginatedDechargements.length === 0">
+            <td colspan="9" style="text-align: center; padding: 40px; color: #94a3b8;">
+              <i class="bi bi-inbox" style="font-size: 48px; display: block; margin-bottom: 16px;"></i>
+              {{ searchFilter ? 'Aucun résultat trouvé' : 'Aucun déchargement enregistré' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container" *ngIf="filteredDechargements.length > 0">
+      <div class="pagination-info">
+        Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredDechargements.length) }} sur {{ filteredDechargements.length }} entrées
+      </div>
+      <div class="pagination-controls">
+        <button 
+          class="page-btn" 
+          (click)="goToPage(1)" 
+          [disabled]="currentPage === 1"
+          title="Première page">
+          <i class="bi bi-chevron-double-left"></i>
+        </button>
+        <button 
+          class="page-btn" 
+          (click)="goToPage(currentPage - 1)" 
+          [disabled]="currentPage === 1"
+          title="Page précédente">
+          <i class="bi bi-chevron-left"></i>
+        </button>
+        
+        <button 
+          *ngFor="let page of getPageNumbers()" 
+          class="page-btn" 
+          [class.active]="page === currentPage"
+          (click)="goToPage(page)">
+          {{ page }}
+        </button>
+        
+        <button 
+          class="page-btn" 
+          (click)="goToPage(currentPage + 1)" 
+          [disabled]="currentPage === totalPages"
+          title="Page suivante">
+          <i class="bi bi-chevron-right"></i>
+        </button>
+        <button 
+          class="page-btn" 
+          (click)="goToPage(totalPages)" 
+          [disabled]="currentPage === totalPages"
+          title="Dernière page">
+          <i class="bi bi-chevron-double-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Edit Dialog -->
+    <div class="dialog-backdrop" *ngIf="showEditDialog" (click)="closeEditDialog()">
+      <div class="dialog-modal" (click)="$event.stopPropagation()" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+          <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+            <i class="bi bi-box-arrow-down" style="font-size: 24px; color: white;"></i>
+          </div>
+          <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: #1e293b;">Modifier le déchargement</h3>
+        </div>
+        
+        <div *ngIf="error" style="background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; font-size: 13px; border-left: 4px solid #dc2626;">
+          <i class="bi bi-exclamation-triangle-fill" style="margin-right: 8px;"></i>{{ error }}
+        </div>
+
+        <form (ngSubmit)="saveDechargement()">
+          <!-- Société (obligatoire) -->
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568; font-size: 13px;">
+              <i class="bi bi-building"></i> Société *
+            </label>
+            <select 
+              [(ngModel)]="dialogDechargement.societeP" 
+              name="societeP"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: white;"
+              required
+            >
+              <option [ngValue]="null" disabled>-- Sélectionner une société --</option>
+              <option *ngFor="let societe of societesList" [value]="societe">
+                {{ societe }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Informations du projet (lecture seule) -->
+          <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 2px solid #e2e8f0;">
+            <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+              <i class="bi bi-info-circle-fill"></i> Informations du projet
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+              <div>
+                <div style="color: #64748b; margin-bottom: 4px;">Produit</div>
+                <div style="font-weight: 600; color: #1e293b;">{{ dialogDechargement.produit || 'N/A' }}</div>
+              </div>
+              <div>
+                <div style="color: #64748b; margin-bottom: 4px;">Navire</div>
+                <div style="font-weight: 600; color: #1e293b;">{{ dialogDechargement.navire || 'N/A' }}</div>
+              </div>
+              <div>
+                <div style="color: #64748b; margin-bottom: 4px;">Port</div>
+                <div style="font-weight: 600; color: #1e293b;">{{ dialogDechargement.port || 'N/A' }}</div>
+              </div>
+            </div>
+          </div>
+
+          
+
+          <!-- Date et Heure -->
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568; font-size: 13px;">
+              <i class="bi bi-calendar-event"></i> Date et Heure de Déchargement *
+            </label>
+            <input 
+              type="datetime-local" 
+              [(ngModel)]="dialogDechargement.dateDechargement" 
+              name="dateDechargement"
+              style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+              required
+            />
+          </div>
+
+          <!-- Numéro de Ticket et Bon de Livraison -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568; font-size: 13px;">
+                <i class="bi bi-ticket-perforated"></i> N° Ticket *
+              </label>
+              <input 
+                type="text" 
+                [(ngModel)]="dialogDechargement.numTicket" 
+                name="numTicket"
+                placeholder="Numéro de ticket" 
+                style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                required
+              />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; font-size: 13px;">
+                <i class="bi bi-file-text"></i> Bon de Livraison
+              </label>
+              <input 
+                type="text" 
+                [(ngModel)]="dialogDechargement.numBonLivraison" 
+                name="numBonLivraison"
+                placeholder="Numéro de bon" 
+                style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+              />
+            </div>
+          </div>
+
+          <!-- Poids -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568; font-size: 13px;">
+                <i class="bi bi-arrow-down-circle"></i> Poids Tare 
+              </label>
+              <input 
+                type="text" 
+                [(ngModel)]="dialogDechargement.poidCamionVide" 
+                name="poidCamionVide"
+                placeholder="0" 
+                step="1"
+                min="0"
+                style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                required
+              />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568; font-size: 13px;">
+                <i class="bi bi-arrow-up-circle"></i> Poids Brut 
+              </label>
+              <input 
+                type="text" 
+                [(ngModel)]="dialogDechargement.poidComplet" 
+                name="poidComplet"
+                placeholder="0" 
+                step="1"
+                min="0"
+                style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Poids Net (calculé) -->
+          <div style="margin-bottom: 16px; padding: 12px; background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%); border-radius: 8px; border: 2px solid #667eea30;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #4a5568; font-size: 13px;">
+              <i class="bi bi-calculator"></i> Poids Net
+            </label>
+            <div style="font-size: 20px; font-weight: 700; color: #667eea;">
+              {{ (dialogDechargement.poidComplet || 0) - (dialogDechargement.poidCamionVide || 0) | number:'1.0-0' }} kg
+            </div>
+          </div>
+
+          <!-- Reste disponible du projet -->
+          <div *ngIf="projetActif" style="margin-bottom: 16px; padding: 12px; background: white; border-radius: 8px; border: 2px solid #e2e8f0; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">
+                <i class="bi bi-box-seam"></i> Quantité totale du projet:
+              </span>
+              <span style="font-weight: 600; color: #10b981;">
+                {{ projetActif.quantiteTotale || 0 | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span style="color: #64748b;">
+                <i class="bi bi-truck-flatbed"></i> Déjà livré:
+              </span>
+              <span style="font-weight: 600; color: #f59e0b;">
+                {{ (projetActif.quantiteTotale || 0) - getResteProjet(editMode && selectedDechargement ? selectedDechargement.id : undefined) | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+              <span style="color: #64748b; font-weight: 600;">
+                <i class="bi bi-calculator-fill"></i> Reste disponible:
+              </span>
+              <span style="font-weight: 700; font-size: 14px;" 
+                    [style.color]="getResteProjet(editMode && selectedDechargement ? selectedDechargement.id : undefined) > 0 ? '#10b981' : '#ef4444'">
+                {{ getResteProjet(editMode && selectedDechargement ? selectedDechargement.id : undefined) | number:'1.0-0' }} kg
+              </span>
+            </div>
+            <div *ngIf="dialogDechargement.poidComplet && dialogDechargement.poidCamionVide" 
+                 style="margin-top: 8px; padding: 8px; background: #fef3c7; border-radius: 6px;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: #92400e; font-size: 11px;">
+                  <i class="bi bi-exclamation-triangle-fill"></i> Après cette opération:
+                </span>
+                <span style="font-weight: 700; font-size: 13px;"
+                      [style.color]="getResteProjetApresOperation() >= 0 ? '#15803d' : '#dc2626'">
+                  {{ getResteProjetApresOperation() | number:'1.0-0' }} kg
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Transporteur (modifiable) -->
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #4a5568; font-size: 13px;">
+              <i class="bi bi-truck"></i> Transporteur
+            </label>
+            <input 
+              type="text" 
+              [(ngModel)]="dialogDechargement.societe" 
+              name="societe"
+              placeholder="Nom du transporteur" 
+              style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+            />
+          </div>
+
+          <!-- Type de destination -->
+          <div style="margin-bottom: 16px;">
+            <div style="font-size: 12px; font-weight: 600; color: #667eea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">
+              <i class="bi bi-geo-alt"></i> Destination
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <button 
+                type="button"
+                [style.background]="dialogDechargement._type === 'client' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+                [style.color]="dialogDechargement._type === 'client' ? 'white' : '#64748b'"
+                [style.border]="dialogDechargement._type === 'client' ? 'none' : '2px solid #e2e8f0'"
+                style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                (click)="dialogDechargement._type = 'client'; dialogDechargement.depotId = undefined;"
+              >
+                <i class="bi bi-person-fill" style="font-size: 18px;"></i> Client
+              </button>
+              <button 
+                type="button"
+                [style.background]="dialogDechargement._type === 'depot' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f1f5f9'"
+                [style.color]="dialogDechargement._type === 'depot' ? 'white' : '#64748b'"
+                [style.border]="dialogDechargement._type === 'depot' ? 'none' : '2px solid #e2e8f0'"
+                style="padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                (click)="dialogDechargement._type = 'depot'; dialogDechargement.clientId = undefined;"
+              >
+                <i class="bi bi-building" style="font-size: 18px;"></i> Dépôt
+              </button>
+            </div>
+          </div>
+
+          <!-- Client -->
+          <div *ngIf="dialogDechargement._type === 'client'" style="background: #f0fdf4; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #86efac;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #15803d; font-size: 13px;">
+              <i class="bi bi-person-check-fill"></i> Client *
+            </label>
+            <div style="position: relative;">
+              <input 
+                [(ngModel)]="clientSearchInput" 
+                (input)="onClientSearchInput()"
+                (focus)="onClientSearchInput()"
+                [name]="'clientSearch'"
+                placeholder="Rechercher un client par nom ou numéro..." 
+                style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #86efac; border-radius: 8px; font-size: 14px;"
+                autocomplete="off"
+              />
+              <div *ngIf="showClientDropdown && filteredClientsSearch.length > 0" 
+                   style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #86efac; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; max-height: 200px; overflow-y: auto;">
+                <div *ngFor="let cl of filteredClientsSearch" 
+                     (click)="selectClientForEdit(cl)"
+                     style="padding: 12px; cursor: pointer; border-bottom: 1px solid #f0fdf4; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;"
+                     onmouseover="this.style.background='#f0fdf4'"
+                     onmouseout="this.style.background='white'">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 500; color: #1e293b;">{{ cl.nom }}</div>
+                    <div style="font-size: 12px; color: #64748b;">N°: {{ cl.numero || 'N/A' }}</div>
+                  </div>
+                  <i class="bi bi-arrow-return-left" style="color: #86efac;"></i>
+                </div>
+              </div>
+              <div *ngIf="showClientDropdown && filteredClientsSearch.length === 0 && clientSearchInput.trim()" 
+                   style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #86efac; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; padding: 16px; text-align: center; color: #64748b;">
+                <i class="bi bi-search"></i> Aucun client trouvé
+              </div>
+            </div>
+            
+            <div *ngIf="dialogDechargement.clientId" style="margin-top: 12px; padding: 12px; background: white; border-radius: 8px; font-size: 13px;">
+              <div style="font-weight: 600; color: #15803d; margin-bottom: 4px;">
+                Client sélectionné: {{ getClientName(dialogDechargement.clientId) }}
+              </div>
+            </div>
+            <!-- Autorisation code selection for client (per-code quantities) -->
+            <div *ngIf="dialogDechargement.clientId" style="margin-top: 12px;">
+              <label style="display:block; margin-bottom:8px; font-weight:600; color:#15803d; font-size:13px;">Code d'autorisation (si applicable)</label>
+              <div *ngIf="getClientAutorisations(dialogDechargement.clientId).length > 0" style="display:flex; gap:12px; align-items:center;">
+                <select [(ngModel)]="dialogDechargement.autorisationCode" name="autorisationCode" style="padding:8px 10px; border-radius:6px; border:1px solid #e2e8f0;">
+                  <option [ngValue]="undefined">-- Aucun --</option>
+                  <option *ngFor="let a of getClientAutorisations(dialogDechargement.clientId)" [value]="a.code">{{ a.code }} — {{ a.quantite || 0 }} kg</option>
+                </select>
+                <div *ngIf="getClientAutorisations(dialogDechargement.clientId).length > 0" style="font-size:13px; color:#475569;">
+                  <div *ngFor="let a of getClientAutorisations(dialogDechargement.clientId)" style="margin-bottom:4px;">
+                    <strong>{{ a.code }}</strong>: Autorisée {{ a.quantite || 0 }} kg — Livré {{ getTotalLivreClientForCode(dialogDechargement.clientId!, a.code) || 0 }} kg — Reste {{ getResteClientForCode(dialogDechargement.clientId!, a.code, editMode && selectedDechargement ? selectedDechargement.id : undefined) | number:'1.0-0' }} kg
+                  </div>
+                </div>
+              </div>
+              <div *ngIf="getClientAutorisations(dialogDechargement.clientId).length === 0" style="font-size:13px; color:#64748b;">Aucun code d'autorisation défini pour ce client.</div>
+            </div>
+          </div>
+
+          <!-- Dépôt -->
+          <div *ngIf="dialogDechargement._type === 'depot'" style="background: #fef3c7; padding: 16px; border-radius: 12px; margin-bottom: 16px; border: 2px solid #fcd34d;">
+            <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #92400e; font-size: 13px;">
+              <i class="bi bi-building"></i> Dépôt *
+            </label>
+            <div style="position: relative;">
+              <input 
+                [(ngModel)]="depotSearchInput" 
+                (input)="onDepotSearchInput()"
+                (focus)="onDepotSearchInput()"
+                [name]="'depotSearch'"
+                placeholder="Rechercher un dépôt par nom..." 
+                style="background: white; width: 100%; padding: 10px 14px; border: 2px solid #fcd34d; border-radius: 8px; font-size: 14px;"
+                autocomplete="off"
+              />
+              <div *ngIf="showDepotDropdown && filteredDepotsSearch.length > 0" 
+                   style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #fcd34d; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; max-height: 200px; overflow-y: auto;">
+                <div *ngFor="let dep of filteredDepotsSearch" 
+                     (click)="selectDepotForEdit(dep)"
+                     style="padding: 12px; cursor: pointer; border-bottom: 1px solid #fef3c7; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;"
+                     onmouseover="this.style.background='#fef3c7'"
+                     onmouseout="this.style.background='white'">
+                  <div style="flex: 1;">
+                    <div style="font-weight: 500; color: #1e293b;">{{ dep.nom }}</div>
+                  </div>
+                  <i class="bi bi-arrow-return-left" style="color: #fcd34d;"></i>
+                </div>
+              </div>
+              <div *ngIf="showDepotDropdown && filteredDepotsSearch.length === 0 && depotSearchInput.trim()" 
+                   style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #fcd34d; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 1000; margin-top: 4px; padding: 16px; text-align: center; color: #64748b;">
+                <i class="bi bi-search"></i> Aucun dépôt trouvé
+              </div>
+            </div>
+
+            <div *ngIf="dialogDechargement.depotId" style="margin-top: 12px; padding: 12px; background: white; border-radius: 8px; font-size: 13px;">
+              <div style="font-weight: 600; color: #92400e; margin-bottom: 4px;">
+                Dépôt sélectionné: {{ getDepotName(dialogDechargement.depotId) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 20px; border-top: 2px solid #e2e8f0;">
+            <button 
+              type="button"
+              (click)="closeEditDialog()" 
+              style="padding: 12px 24px; border: 2px solid #e2e8f0; background: white; color: #64748b; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.background='#f8fafc'" 
+              onmouseout="this.style.background='white'">
+              <i class="bi bi-x-circle"></i> Annuler
+            </button>
+            <button 
+              type="submit"
+              style="padding: 12px 24px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+              onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(102, 126, 234, 0.4)'" 
+              onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+              <i class="bi bi-check-circle"></i> Enregistrer
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-backdrop" *ngIf="showDeleteDialog" (click)="closeDeleteDialog()"></div>
+    <div class="modal-dialog" *ngIf="showDeleteDialog">
+      <div class="modal-content">
+        <div class="modal-header" style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);">
+          <h3 style="color: white;">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            ⚠️ OPÉRATION DANGEREUSE
+          </h3>
+          <button class="close-btn" (click)="closeDeleteDialog()" style="color: white;">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-danger" style="background-color: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <h4 style="color: #dc2626; margin: 0 0 12px 0; font-weight: 600;">
+              <i class="bi bi-shield-exclamation"></i> Attention: Synchronisation Automatique
+            </h4>
+            <p style="margin: 0; color: #991b1b; line-height: 1.6;">
+              <strong>Cette suppression va déclencher les actions suivantes:</strong>
+            </p>
+            <ul style="margin: 12px 0 0 20px; color: #991b1b;">
+              <li>✓ Suppression du déchargement sélectionné</li>
+              <li><strong>✓ Suppression automatique du voyage associé</strong></li>
+              <li>✓ Création d'une notification de traçabilité</li>
+            </ul>
+            <p style="margin: 12px 0 0 0; color: #7f1d1d; font-weight: 600;">
+              <i class="bi bi-exclamation-circle-fill"></i> Cette action est IRRÉVERSIBLE et affectera plusieurs entités !
+            </p>
+          </div>
+          
+          <p style="font-weight: 600; margin-bottom: 16px; color: #1f2937;">
+            Êtes-vous absolument sûr de vouloir supprimer ce déchargement ?
+          </p>
+          
+          <div class="delete-info" *ngIf="dechargementToDelete" style="background-color: #f9fafb; border-radius: 8px; padding: 16px;">
+            <h4 style="margin: 0 0 12px 0; color: #374151; font-size: 14px; font-weight: 600;">
+              📦 Informations du déchargement à supprimer:
+            </h4>
+            <div class="info-row">
+              <strong>N° Ticket:</strong>
+              <span>{{ dechargementToDelete.numTicket }}</span>
+            </div>
+            <div class="info-row">
+              <strong>N° Bon de Livraison:</strong>
+              <span>{{ dechargementToDelete.numBonLivraison || 'N/A' }}</span>
+            </div>
+            <div class="info-row" *ngIf="dechargementToDelete.clientId">
+              <strong>Client:</strong>
+              <span>{{ getClientName(dechargementToDelete.clientId) }}</span>
+            </div>
+            <div class="info-row" *ngIf="dechargementToDelete.depotId">
+              <strong>Dépôt:</strong>
+              <span>{{ getDepotName(dechargementToDelete.depotId) }}</span>
+            </div>
+            <div class="info-row">
+              <strong>Poids Net:</strong>
+              <span>{{ calculatePoidsNet(dechargementToDelete).toFixed(0) }} kg</span>
+            </div>
+            <div class="info-row">
+              <strong>Date:</strong>
+              <span>{{ dechargementToDelete.dateDechargement | date:'dd/MM/yyyy HH:mm' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="closeDeleteDialog()">
+            <i class="bi bi-x-circle"></i>
+            Annuler
+          </button>
+          <button class="btn btn-danger" (click)="confirmDelete()" style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); font-weight: 600;">
+            <i class="bi bi-trash"></i>
+            Confirmer la Suppression
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de confirmation de dépassement -->
+    <div class="modal-overlay" *ngIf="showDepassementModal" (click)="cancelDepassement()" style="z-index: 2000;">
+      <div class="modal-container" (click)="$event.stopPropagation()" style="max-width: 500px; z-index: 2001;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white;">
+          <i class="bi bi-exclamation-triangle" style="font-size: 24px; margin-right: 12px;"></i>
+          <h3 style="margin: 0; font-size: 20px; font-weight: 600;">Dépassement de quantité autorisée</h3>
+        </div>
+        
+        <div class="modal-body" style="padding: 32px; text-align: center;">
+          <div style="margin-bottom: 24px;">
+            <div style="width: 80px; height: 80px; margin: 0 auto 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);">
+              <i class="bi bi-exclamation-triangle" style="font-size: 40px; color: #f59e0b;"></i>
+            </div>
+          </div>
+          
+          <p style="font-size: 16px; color: #1f2937; margin-bottom: 16px; line-height: 1.6;">
+            Vous êtes sur le point de <strong>dépasser la quantité autorisée</strong> pour ce client.
+          </p>
+          
+          <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: 12px; margin: 20px 0; border: 2px solid #fbbf24;">
+            <div style="font-size: 14px; color: #92400e; margin-bottom: 8px; font-weight: 500;">
+              Quantité de dépassement
+            </div>
+            <div style="font-size: 32px; font-weight: 700; color: #f59e0b;">
+              {{ depassementQuantite | number:'1.0-0' }} <span style="font-size: 18px;">kg</span>
+            </div>
+          </div>
+          
+          <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+            Êtes-vous sûr de vouloir continuer cette opération ?
+          </p>
+        </div>
+        
+        <div class="modal-footer" style="padding: 20px 32px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; display: flex; gap: 12px; justify-content: flex-end;">
+          <button 
+            type="button" 
+            class="btn-secondary" 
+            (click)="cancelDepassement()"
+            style="padding: 10px 24px; border-radius: 8px; font-weight: 500; background: white; color: #6b7280; border: 1px solid #d1d5db; cursor: pointer; transition: all 0.2s;">
+            <i class="bi bi-x-circle" style="margin-right: 8px;"></i>
+            Annuler
+          </button>
+          <button 
+            type="button" 
+            class="btn-primary" 
+            (click)="confirmDepassement()"
+            style="padding: 10px 24px; border-radius: 8px; font-weight: 500; background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%); color: white; border: none; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3);">
+            <i class="bi bi-check-circle" style="margin-right: 8px;"></i>
+            Oui, continuer
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>

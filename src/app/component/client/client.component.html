@@ -1,0 +1,612 @@
+
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="280" [sidebarClosedWidth]="75"></app-navbar>
+
+<!-- Modal d'alerte moderne -->
+<div class="alert-modal-backdrop" *ngIf="showAlert" [@fadeIn] (click)="closeAlert()">
+	<div class="alert-modal" [@slideIn] (click)="$event.stopPropagation()" [ngClass]="{
+		'alert-modal-success': alertType === 'success',
+		'alert-modal-danger': alertType === 'danger',
+		'alert-modal-warning': alertType === 'warning',
+		'alert-modal-info': alertType === 'info'
+	}">
+		<div class="alert-modal-icon">
+			<i class="bi" [ngClass]="{
+				'bi-check-circle-fill': alertType === 'success',
+				'bi-exclamation-triangle-fill': alertType === 'danger',
+				'bi-exclamation-circle-fill': alertType === 'warning',
+				'bi-info-circle-fill': alertType === 'info'
+			}"></i>
+		</div>
+		<h3 class="alert-modal-title">{{ getAlertTitle() }}</h3>
+		<p class="alert-modal-message">{{ alertMessage }}</p>
+		<button class="alert-modal-btn" (click)="closeAlert()">
+			<i class="bi bi-check-lg"></i> D'accord
+		</button>
+	</div>
+</div>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+	<main class="content">
+		<!-- Breadcrumb Navigation -->
+		<app-breadcrumb [items]="breadcrumbItems" [showBackButton]="true"></app-breadcrumb>
+		
+		<!-- Header moderne -->
+		<div class="page-header">
+			<div class="header-left">
+				<div class="header-icon">
+					<i class="bi bi-people-fill"></i>
+				</div>
+				<div>
+					<h1 class="page-title">Gestion des Clients</h1>
+					<p class="page-subtitle">{{ filteredClients.length }} client(s) trouvé(s)</p>
+				</div>
+			</div>
+			<div style="display: flex; gap: 12px;">
+				<button class="export-btn excel-btn" (click)="exportToExcel()" title="Exporter en Excel">
+					<i class="bi bi-file-earmark-excel"></i>
+					<span>Excel</span>
+				</button>
+				<button class="export-btn pdf-btn" (click)="exportToPDF()" title="Exporter en PDF">
+					<i class="bi bi-file-earmark-pdf"></i>
+					<span>PDF</span>
+				</button>
+				<button class="add-btn" (click)="openAddDialog()" [disabled]="!canAddData()" [title]="!canAddData() ? 'Ce projet n\'est pas actif' : 'Ajouter un nouveau client'">
+					<i class="bi bi-plus-circle"></i>
+					<span>Nouveau Client</span>
+				</button>
+			</div>
+		</div>
+
+		<!-- Filter Buttons -->
+		<div class="filter-section" style="margin-bottom: 20px;">
+			<div style="display: flex; gap: 12px; flex-wrap: wrap;">
+				<button 
+					class="filter-btn" 
+					[class.active]="!dateFilterActive"
+					(click)="clearDateFilter()"
+					style="flex: 1; min-width: 150px;">
+					<i class="bi bi-list-ul"></i>
+					<span>Tous les clients</span>
+					<span class="filter-badge">{{ filteredClients.length }}</span>
+				</button>
+				<button 
+					class="filter-btn" 
+					[class.active]="dateFilterActive"
+					(click)="toggleDateFilter()"
+					style="flex: 1; min-width: 150px;">
+					<i class="bi bi-calendar-event"></i>
+					<span>Filtrer par date</span>
+					<span class="filter-badge" *ngIf="dateDebut || dateFin">1</span>
+				</button>
+			</div>
+			
+			<!-- Date Filter Details -->
+			<div *ngIf="dateFilterActive" class="filter-details" style="margin-top: 16px; padding: 16px; background: #f8fafc; border-radius: 12px; border-left: 4px solid #667eea;">
+				<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #1e293b; font-size: 14px;">
+					<i class="bi bi-calendar3"></i> Sélectionner une plage de dates
+				</label>
+				<div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+					<div style="flex: 1; min-width: 200px;">
+						<label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+							Date début
+						</label>
+						<input 
+							type="date" 
+							[(ngModel)]="dateDebut" 
+							(change)="onDateFilterChange()"
+							[max]="today"
+							style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+						/>
+					</div>
+					<div style="flex: 1; min-width: 200px;">
+						<label style="display: block; margin-bottom: 6px; font-size: 12px; color: #64748b; font-weight: 500;">
+							Date fin
+						</label>
+						<input 
+							type="date" 
+							[(ngModel)]="dateFin" 
+							(change)="onDateFilterChange()"
+							[max]="today"
+							style="width: 100%; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px;"
+						/>
+					</div>
+					<button 
+						*ngIf="dateDebut || dateFin"
+						(click)="clearDateFilter()"
+						style="padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.3s ease; align-self: flex-end;"
+						onmouseover="this.style.background='#dc2626'"
+						onmouseout="this.style.background='#ef4444'">
+						<i class="bi bi-x-circle"></i> Effacer
+					</button>
+				</div>
+								<div *ngIf="dateDebut || dateFin" style="margin-top: 12px; padding: 12px; background: #e0e7ff; border-radius: 8px; display: flex; align-items: center; gap: 8px;">
+					<i class="bi bi-info-circle-fill" style="color: #667eea; font-size: 16px; flex-shrink: 0;"></i>
+					<div style="font-size: 13px; color: #4338ca; line-height: 1.4;">
+						<strong>Journée de travail :</strong> Les quantités incluent les voyages de <strong>7h00</strong> le matin jusqu'à <strong>6h00</strong> le lendemain
+						<span *ngIf="dateDebut && dateFin">, du <strong>{{ formatDate(dateDebut) }}</strong> au <strong>{{ formatDate(dateFin) }}</strong></span>
+						<span *ngIf="dateDebut && !dateFin">, à partir du <strong>{{ formatDate(dateDebut) }}</strong></span>
+						<span *ngIf="!dateDebut && dateFin">, jusqu'au <strong>{{ formatDate(dateFin) }}</strong></span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Toolbar avec recherche et options -->
+		<div class="toolbar-section">
+			<div class="search-box">
+				<i class="bi bi-search"></i>
+				<input 
+					type="text" 
+					class="search-input" 
+					placeholder="Rechercher par nom ou numéro..." 
+					[(ngModel)]="clientFilter" 
+					(input)="applyFilter()" 
+				/>
+			</div>
+			<div class="toolbar-right">
+				<span class="results-count">{{ filteredClients.length }} résultat(s)</span>
+				<div class="page-size-selector">
+					<label>Afficher</label>
+					<select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+						<option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+					</select>
+					<label>lignes</label>
+				</div>
+			</div>
+		</div>
+
+		<!-- Table moderne -->
+		<div class="table-container">
+			<table class="modern-table">
+				<thead>
+					<tr>
+						<th (click)="sortBy('nom')" class="sortable">
+							<div class="th-content">
+								<span>Nom</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'nom' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'nom' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'nom'
+								}"></i>
+							</div>
+						</th>
+						<th (click)="sortBy('numero')" class="sortable">
+							<div class="th-content">
+								<span>Numéro</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'numero' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'numero' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'numero'
+								}"></i>
+							</div>
+						</th>
+						<th (click)="sortBy('adresse')" class="sortable">
+							<div class="th-content">
+								<span>Adresse</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'adresse' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'adresse' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'adresse'
+								}"></i>
+							</div>
+						</th>
+						<th (click)="sortBy('mf')" class="sortable">
+							<div class="th-content">
+								<span>Matricule Fiscal</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'mf' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'mf' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'mf'
+								}"></i>
+							</div>
+						</th>
+						<th *ngIf="projetActifId" (click)="sortBy('quantite')" class="sortable">
+							<div class="th-content">
+								<span>Autorisations</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'quantite' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'quantite' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'quantite'
+								}"></i>
+							</div>
+						</th>
+						<th *ngIf="projetActifId" (click)="sortBy('quantiteVendue')" class="sortable">
+							<div class="th-content">
+								<span>Quantité vendue</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'quantiteVendue' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'quantiteVendue' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'quantiteVendue'
+								}"></i>
+							</div>
+						</th>
+						<th *ngIf="projetActifId" (click)="sortBy('reste')" class="sortable">
+							<div class="th-content">
+								<span>Reste</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-up': sortColumn === 'reste' && sortDirection === 'asc',
+									'bi-chevron-down': sortColumn === 'reste' && sortDirection === 'desc',
+									'bi-chevron-expand': sortColumn !== 'reste'
+								}"></i>
+							</div>
+						</th>
+						<th class="actions-header text-center">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr *ngFor="let cl of paginatedClients" class="table-row"
+					    [style.background-color]="isClientEnDepassement(cl) ? '#fee2e2' : ''"
+					    [style.border-left]="isClientEnDepassement(cl) ? '4px solid #dc2626' : ''">
+						<td class="name-cell">
+							<div class="client-name">
+								<i class="bi bi-person-circle" [style.color]="isClientEnDepassement(cl) ? '#dc2626' : ''"></i>
+								<span [style.font-weight]="isClientEnDepassement(cl) ? '700' : ''">{{ cl.nom }}</span>
+								<i *ngIf="isClientEnDepassement(cl)" class="bi bi-exclamation-triangle-fill" style="color: #dc2626; margin-left: 8px;"></i>
+							</div>
+						</td>
+						<td class="numero-cell">{{ cl.numero }}</td>
+						<td>
+							<i class="bi bi-geo-alt" style="margin-right: 8px; color: #10b981;"></i>
+							{{ cl.adresse || '-' }}
+						</td>
+						<td>
+							<i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
+							{{ cl.mf || '-' }}
+						</td>
+						<td *ngIf="projetActifId" class="quantite-cell">
+							<div style="display:flex;flex-direction:column;gap:6px;">
+								<div class="auth-cell">
+					<button type="button" class="auth-edit" (click)="openEditQuantiteModal(cl)" title="Modifier les autorisations">
+						<i class="bi bi-pencil-fill edit-icon" aria-hidden="true"></i>
+					</button>
+									<ng-container *ngIf="$any(cl).autorisation && $any(cl).autorisation.length > 0; else totalAuthFallback">
+										<div class="auth-list">
+											<div *ngFor="let a of $any(cl).autorisation" class="auth-item">
+												<div class="auth-code">{{ a.code || 'DEFAULT' }}</div>
+												<div class="auth-qty">{{ (a.quantite || 0) | number:'1.0-2' }} kg</div>
+											</div>
+										</div>
+									</ng-container>
+								<ng-template #totalAuthFallback>
+									<!-- no autorisations: already show total in badge above -->
+								</ng-template>
+							</div>
+						</div>
+						</td>
+						<td *ngIf="projetActifId" class="quantite-vendue-cell">
+							<ng-container *ngIf="$any(cl).autorisation && $any(cl).autorisation.length > 0; else totalVenduFallback">
+								<div class="vendue-list">
+									<div *ngFor="let a of $any(cl).autorisation" class="vendue-item">
+										<div class="vendue-code"><strong>{{ a.code || 'DEFAULT' }}</strong></div>
+										<div class="vendue-value">{{ getTotalLivreForClientCode(cl.id, a.code) | number:'1.0-2' }} kg</div>
+									</div>
+								</div>
+							</ng-container>
+							<ng-template #totalVenduFallback>
+								<span class="vendue-badge">
+									<i class="bi bi-box-seam-fill"></i>
+									{{ getTotalLivreClient(cl.id) | number:'1.0-2' }} kg
+								</span>
+							</ng-template>
+						</td>
+						<td *ngIf="projetActifId" class="reste-cell">
+							<ng-container *ngIf="$any(cl).autorisation && $any(cl).autorisation.length > 0; else totalResteFallback">
+								<div class="reste-list">
+									<div *ngFor="let a of $any(cl).autorisation" class="reste-item">
+										<div class="reste-code">{{ a.code || 'DEFAULT' }}</div>
+										<div class="reste-value" [ngClass]="getResteForClientCode(cl, a.code) > 0 ? 'positive' : 'negative'">{{ getResteForClientCode(cl, a.code) | number:'1.0-2' }} kg</div>
+									</div>
+								</div>
+							</ng-container>
+							<ng-template #totalResteFallback>
+								<span class="reste-badge" [style.background]="getResteColor(getResteClient(cl), getQuantitePourProjet(cl) || 0)" [style.color]="'white'">
+									{{ getResteClient(cl) | number:'1.0-2' }} kg
+								</span>
+							</ng-template>
+						</td>
+						<td class="actions-cell">
+							<button class="action-btn edit-btn" (click)="selectClient(cl)" [disabled]="!isProjetActif()" title="Modifier">
+								<i class="bi bi-pencil-square"></i>
+							</button>
+							<button class="action-btn delete-btn" (click)="deleteClient(cl.id)" [disabled]="!isProjetActif()" title="Supprimer">
+								<i class="bi bi-trash3"></i>
+							</button>
+						</td>
+					</tr>
+					<tr *ngIf="paginatedClients.length === 0" class="no-data-row">
+						<td [attr.colspan]="projetActifId ? 6 : 3">
+							<div class="no-data">
+								<i class="bi bi-inbox"></i>
+								<p>Aucun client trouvé</p>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<!-- Pagination -->
+		<div class="pagination-container" *ngIf="filteredClients.length > 0">
+			<div class="pagination-info">
+				Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredClients.length) }} sur {{ filteredClients.length }} client(s)
+			</div>
+			<div class="pagination-controls">
+				<button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-double-left"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-left"></i>
+				</button>
+				<button 
+					*ngFor="let page of getPageNumbers()" 
+					class="page-btn"
+					[class.active]="page === currentPage"
+					(click)="goToPage(page)">
+					{{ page }}
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-right"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-double-right"></i>
+				</button>
+			</div>
+		</div>
+
+					<!-- Dialog modal pour ajout ou modification client -->
+					<div class="dialog-backdrop" *ngIf="showAddClient || editMode">
+						<div class="dialog-modal">
+							<h3>{{ editMode ? 'Modifier le client' : 'Ajouter un client' }}</h3>
+							
+							<!-- Message d'information pour l'autocomplétion -->
+							<div *ngIf="!editMode && selectedExistingClient" style="background: #dbeafe; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; border-left: 4px solid #3b82f6;">
+								<div style="display: flex; align-items: center; gap: 8px; color: #1e40af;">
+									<i class="bi bi-info-circle-fill"></i>
+									<span style="font-size: 13px; font-weight: 600;">Client existant sélectionné - Il sera associé à ce projet</span>
+								</div>
+							</div>
+							
+							<!-- Champ Nom avec autocomplétion -->
+							<div style="position: relative; margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-person-fill"></i> Nom du client *
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.nom" 
+									(input)="onClientInputChange('nom')"
+									(blur)="closeSuggestions()"
+									placeholder="Rechercher ou créer un client..." 
+									class="table-filter"
+									[disabled]="editMode"
+									style="width: 100%;" 
+								/>
+								
+								<!-- Liste de suggestions -->
+								<div *ngIf="showSuggestions && filteredSuggestions.length > 0" 
+									class="suggestions-list"
+									style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 2px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto; z-index: 1000; margin-top: 4px;">
+									<div *ngFor="let suggestion of filteredSuggestions" 
+										(mousedown)="selectSuggestion(suggestion)"
+										class="autocomplete-suggestion">
+										<i class="bi bi-person-circle"></i>
+										<div class="suggestion-details">
+											<div class="suggestion-name">{{ suggestion.nom }}</div>
+											<div class="suggestion-numero">{{ suggestion.numero }}</div>
+										</div>
+										<i class="bi bi-arrow-return-left suggestion-icon-return"></i>
+									</div>
+								</div>
+							</div>
+							
+							<!-- Champ Numéro avec autocomplétion -->
+							<div style="position: relative; margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-hash"></i> Numéro *
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.numero" 
+									(input)="onClientInputChange('numero')"
+									(blur)="closeSuggestions()"
+									placeholder="Numéro du client" 
+									class="table-filter"
+									[disabled]="editMode"
+									style="width: 100%;" 
+								/>
+							</div>
+							
+							<!-- Champ Adresse -->
+							<div style="margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-geo-alt"></i> Adresse
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.adresse" 
+									placeholder="Adresse du client" 
+									class="table-filter"
+									style="width: 100%;" 
+								/>
+							</div>
+							
+							<!-- Champ Matricule Fiscal -->
+							<div style="margin-bottom: 16px;">
+								<label style="display: block; margin-bottom: 8px; font-weight: 600; color: #475569; font-size: 13px;">
+									<i class="bi bi-file-text"></i> Matricule Fiscal (MF)
+								</label>
+								<input 
+									[(ngModel)]="dialogClient.mf" 
+									placeholder="Matricule fiscal" 
+									class="table-filter"
+									style="width: 100%;" 
+								/>
+							</div>
+							
+							<div class="dialog-actions">
+								<button class="add-row-btn" *ngIf="!editMode" (click)="addDialogClient()" [disabled]="!isProjetActif()">
+									<i class="bi" [ngClass]="selectedExistingClient ? 'bi-link-45deg' : 'bi-plus-lg'"></i>
+									{{ selectedExistingClient ? 'Associer' : 'Ajouter' }}
+								</button>
+								<button class="add-row-btn" *ngIf="editMode" (click)="updateDialogClient()" [disabled]="!isProjetActif()">Enregistrer</button>
+								<button class="add-row-btn" (click)="closeDialog()">Annuler</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Modal pour la quantité autorisée -->
+					<div class="dialog-backdrop" *ngIf="showQuantiteModal" [@fadeIn] (click)="cancelQuantiteModal()">
+						<div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+							<div class="quantite-modal-header">
+								<div class="quantite-modal-icon">
+									<i class="bi bi-calculator"></i>
+								</div>
+								<h3 class="quantite-modal-title">Autorisations</h3>
+								<p class="quantite-modal-subtitle">
+									Définir les autorisations (codes + quantités) pour ce client sur le projet actif
+									<strong *ngIf="contextProjet || projetActif">
+										"{{ (contextProjet || projetActif).nom }}"
+									</strong>
+								</p>
+							</div>
+							
+							<div class="quantite-modal-body">
+								<div style="display:flex; justify-content:space-between; align-items:center;">
+									<label class="quantite-label">
+										<i class="bi bi-box-seam"></i> Autorisations
+									</label>
+								</div>
+
+								<!-- Mode autorisations (par défaut) -->
+								<div *ngIf="addAutorisationMode" class="autorisation-editor">
+									<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+										<button class="add-row-btn" (click)="addingAutorisation.push({ code: '', quantite: 0 })">
+											<i class="bi bi-plus-lg"></i> Ajouter une autorisation
+										</button>
+										<div style="font-size:13px; color:#475569;">Total : <strong>{{ getAddingAutorisationTotal() }} kg</strong></div>
+									</div>
+
+									<table class="autorisation-table" style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+										<thead>
+											<tr style="text-align:left; border-bottom:1px solid #e6edf3;">
+												<th style="padding:8px; width:50%;">Code</th>
+												<th style="padding:8px; width:35%;">Quantité (kg)</th>
+												<th style="padding:8px; width:15%;"></th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr *ngFor="let a of (addingAutorisation || []); let i = index" style="border-bottom:1px dashed #f1f5f9;">
+												<td style="padding:8px;">
+													<input class="table-filter" [(ngModel)]="addingAutorisation[i].code" placeholder="Code (ex: DEFAULT)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
+												</td>
+												<td style="padding:8px;">
+													<input class="table-filter" type="text" min="0" step="0.01" [(ngModel)]="addingAutorisation[i].quantite" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
+												</td>
+												<td style="padding:8px; text-align:center;">
+													<button class="delete-row-btn" (click)="addingAutorisation.splice(i,1)" title="Supprimer cette ligne">
+														<i class="bi bi-trash3"></i>
+													</button>
+												</td>
+											</tr>
+											<tr *ngIf="(addingAutorisation || []).length === 0">
+												<td colspan="3" style="padding:12px; text-align:center; color:#64748b;">Aucune autorisation définie</td>
+											</tr>
+										</tbody>
+									</table>
+
+									<p class="quantite-hint">
+										<i class="bi bi-info-circle"></i>
+										La quantité totale est la somme des autorisations ci-dessus.
+									</p>
+								</div>
+
+								<!-- simple-quantity mode removed: only Autorisations are supported in add flow -->
+							</div>
+							
+							<div class="quantite-modal-actions">
+								<button class="btn-cancel" (click)="cancelQuantiteModal()">
+									<i class="bi bi-x-lg"></i> Annuler
+								</button>
+								<button class="btn-confirm" (click)="confirmQuantiteAndAssociate()">
+									<i class="bi bi-check-lg"></i> Confirmer
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Modal de modification de quantité -->
+					<div class="dialog-backdrop" *ngIf="showEditQuantiteModal" [@fadeIn] (click)="cancelEditQuantite()">
+						<div class="quantite-modal" [@slideIn] (click)="$event.stopPropagation()">
+							<div class="quantite-modal-header">
+								<div class="quantite-modal-icon">
+									<i class="bi bi-pencil-square"></i>
+								</div>
+								<h3 class="quantite-modal-title">Modifier la quantité autorisée</h3>
+								<p class="quantite-modal-subtitle">
+									Client : <strong>{{ editingClient?.nom }}</strong>
+								</p>
+							</div>
+							
+							<div class="quantite-modal-body">
+								<div style="display:flex; justify-content:space-between; align-items:center;">
+									<label class="quantite-label">
+										<i class="bi bi-box-seam"></i> Autorisations
+									</label>
+								</div>
+
+								<!-- legacy simple-quantity removed: edits work only with autorisations -->
+
+								<!-- Mode autorisations : liste éditable -->
+								<div *ngIf="editAutorisationMode" class="autorisation-editor">
+									<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+										<button class="add-row-btn" (click)="addAutorisationRow()">
+											<i class="bi bi-plus-lg"></i> Ajouter une autorisation
+										</button>
+										<div style="font-size:13px; color:#475569;">Total : <strong>{{ getTotalEditingAutorisation() }} kg</strong></div>
+									</div>
+
+									<table class="autorisation-table" style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+										<thead>
+											<tr style="text-align:left; border-bottom:1px solid #e6edf3;">
+												<th style="padding:8px; width:50%;">Code</th>
+												<th style="padding:8px; width:35%;">Quantité (kg)</th>
+												<th style="padding:8px; width:15%;"></th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr *ngFor="let a of editingAutorisation; let i = index" style="border-bottom:1px dashed #f1f5f9;">
+												<td style="padding:8px;">
+													<input class="table-filter" [(ngModel)]="editingAutorisation[i].code" placeholder="Code (ex: DEFAULT)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
+												</td>
+												<td style="padding:8px;">
+													<input class="table-filter" type="text" min="0" step="0.01" [(ngModel)]="editingAutorisation[i].quantite" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
+												</td>
+												<td style="padding:8px; text-align:center;">
+													<button class="delete-row-btn" (click)="removeAutorisationRow(i)" title="Supprimer cette ligne">
+														<i class="bi bi-trash3"></i>
+													</button>
+												</td>
+											</tr>
+											<tr *ngIf="editingAutorisation.length === 0">
+												<td colspan="3" style="padding:12px; text-align:center; color:#64748b;">Aucune autorisation définie</td>
+											</tr>
+										</tbody>
+									</table>
+
+									<p class="quantite-hint">
+										<i class="bi bi-info-circle"></i>
+										La quantité totale est la somme des autorisations ci-dessus. Vous pouvez ajouter plusieurs codes/quantités.
+									</p>
+								</div>
+							</div>
+							
+							<div class="quantite-modal-actions">
+								<button class="btn-cancel" (click)="cancelEditQuantite()">
+									<i class="bi bi-x-lg"></i> Annuler
+								</button>
+								<button class="btn-confirm" (click)="confirmEditQuantite()">
+									<i class="bi bi-check-lg"></i> Confirmer
+								</button>
+							</div>
+						</div>
+					</div>
+	</main>
+</div>

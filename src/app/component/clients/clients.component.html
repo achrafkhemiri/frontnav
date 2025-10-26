@@ -1,0 +1,175 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+	<app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+	<main class="content">
+		<!-- Page Header -->
+		<div class="page-header">
+			<div class="header-left">
+				<div class="header-icon">
+					<i class="bi bi-people-fill"></i>
+				</div>
+				<div>
+					<h1 class="page-title">Tous les Clients</h1>
+					<p class="page-subtitle">{{ filteredClients.length }} client(s) trouvé(s)</p>
+				</div>
+			</div>
+		</div>
+
+		<!-- Toolbar -->
+		<div class="toolbar-section">
+			<div class="search-box">
+				<i class="bi bi-search"></i>
+				<input 
+					type="text" 
+					class="search-input" 
+					placeholder="Rechercher par nom ou numéro..." 
+					[(ngModel)]="clientFilter" 
+					(input)="filterClients()"
+				/>
+			</div>
+			<div class="toolbar-right">
+				<span class="results-count">{{ filteredClients.length }} résultat(s)</span>
+				<div class="page-size-selector">
+					<span>Afficher</span>
+					<select [(ngModel)]="pageSize" (change)="onPageSizeChange()" class="page-size-select">
+						<option *ngFor="let size of pageSizes" [value]="size">{{ size }}</option>
+					</select>
+					<span>lignes</span>
+				</div>
+			</div>
+		</div>
+
+		<!-- Table -->
+		<div class="table-container">
+			<table class="modern-table">
+				<thead>
+					<tr>
+						<th class="sortable" (click)="sortBy('nom')">
+							<div class="th-content">
+								<span>Nom</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'nom' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'nom' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'nom'
+								}"></i>
+							</div>
+						</th>
+						<th class="sortable" (click)="sortBy('numero')">
+							<div class="th-content">
+								<span>Numéro</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'numero' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'numero' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'numero'
+								}"></i>
+							</div>
+						</th>
+						<th class="sortable" (click)="sortBy('adresse')">
+							<div class="th-content">
+								<span>Adresse</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'adresse' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'adresse' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'adresse'
+								}"></i>
+							</div>
+						</th>
+						<th class="sortable" (click)="sortBy('mf')">
+							<div class="th-content">
+								<span>Matricule Fiscal</span>
+								<i class="bi" [ngClass]="{
+									'bi-chevron-down': sortColumn === 'mf' && sortDirection === 'desc',
+									'bi-chevron-up': sortColumn === 'mf' && sortDirection === 'asc',
+									'bi-chevron-expand': sortColumn !== 'mf'
+								}"></i>
+							</div>
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr *ngFor="let cl of paginatedClients" class="table-row">
+						<td>
+							<i class="bi bi-person-circle" style="margin-right: 8px; color: #6366f1;"></i>
+							{{ cl.nom }}
+						</td>
+						<td>{{ cl.numero }}</td>
+						<td>
+							<i class="bi bi-geo-alt" style="margin-right: 8px; color: #10b981;"></i>
+							{{ cl.adresse || '-' }}
+						</td>
+						<td>
+							<i class="bi bi-file-text" style="margin-right: 8px; color: #f59e0b;"></i>
+							{{ cl.mf || '-' }}
+						</td>
+					</tr>
+					<tr *ngIf="paginatedClients.length === 0" class="no-data-row">
+						<td colspan="4">
+							<div class="no-data">
+								<i class="bi bi-inbox"></i>
+								<p>Aucun client trouvé</p>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<!-- Pagination -->
+		<div class="pagination-container" *ngIf="filteredClients.length > 0">
+			<div class="pagination-info">
+				Affichage de {{ (currentPage - 1) * pageSize + 1 }} à {{ Math.min(currentPage * pageSize, filteredClients.length) }} sur {{ filteredClients.length }} client(s)
+			</div>
+			<div class="pagination-controls">
+				<button class="page-btn" (click)="goToPage(1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-double-left"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage - 1)" [disabled]="currentPage === 1">
+					<i class="bi bi-chevron-left"></i>
+				</button>
+				<button 
+					*ngFor="let page of getPageNumbers()" 
+					class="page-btn" 
+					[class.active]="page === currentPage"
+					(click)="goToPage(page)"
+				>
+					{{ page }}
+				</button>
+				<button class="page-btn" (click)="goToPage(currentPage + 1)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-right"></i>
+				</button>
+				<button class="page-btn" (click)="goToPage(totalPages)" [disabled]="currentPage === totalPages">
+					<i class="bi bi-chevron-double-right"></i>
+				</button>
+			</div>
+		</div>
+
+		<!-- Dialog modal pour ajout ou modification client -->
+		<div class="dialog-backdrop" *ngIf="showAddClient">
+			<div class="dialog-modal">
+				<h3>{{ editMode ? 'Modifier le client' : 'Ajouter un client' }}</h3>
+				<form (ngSubmit)="editMode ? updateClient() : saveClient()">
+					<div class="form-group">
+						<label for="nom">Nom:</label>
+						<input type="text" id="nom" [(ngModel)]="dialogClient.nom" name="nom" required />
+					</div>
+					<div class="form-group">
+						<label for="numero">Numéro:</label>
+						<input type="text" id="numero" [(ngModel)]="dialogClient.numero" name="numero" required />
+					</div>
+					<div class="form-group">
+						<label for="adresse">Adresse:</label>
+						<input type="text" id="adresse" [(ngModel)]="dialogClient.adresse" name="adresse" />
+					</div>
+					<div class="form-group">
+						<label for="mf">Matricule Fiscal (MF):</label>
+						<input type="text" id="mf" [(ngModel)]="dialogClient.mf" name="mf" />
+					</div>
+					<div class="dialog-actions">
+						<button type="button" (click)="cancel()">Annuler</button>
+						<button type="submit">{{ editMode ? 'Modifier' : 'Ajouter' }}</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	</main>
+</div>

@@ -1,0 +1,54 @@
+<header class="navbar" [ngStyle]="{'left.px': isSidebarOpen ? sidebarWidth : sidebarClosedWidth}">
+  <div class="navbar-left">
+    <!-- Logo du Projet Actif - Visible seulement si un projet est actif ET qu'on est en vue projet -->
+    <div class="logo" *ngIf="!isAllVoyagesView && (projetActif || currentProjet)">
+      <i class="bi bi-compass"></i>
+      <div class="logo-text">
+        <span class="project-label">Projet Actif</span>
+        <span class="project-name">{{ getProjectDisplay() }}</span>
+      </div>
+    </div>
+
+  <!-- Quantité Restante Widget - Visible seulement si un projet est actif ET qu'on est en vue projet -->
+  <div class="reste-container" *ngIf="!isAllVoyagesView && (projetActif || currentProjet)" [ngClass]="getResteColorClass()">
+      <div class="reste-header">
+        <i class="bi" [ngClass]="getResteIcon()"></i>
+        <span class="reste-label">Reste</span>
+      </div>
+      <div class="reste-content">
+        <div class="reste-value">
+          {{ formatNumber(resteQuantite) }} 
+        </div>
+        <div class="reste-percentage">
+          {{ pourcentageRestant }}%
+        </div>
+      </div>
+      <div class="reste-progress-bar">
+        <div class="reste-progress-fill" [style.width.%]="pourcentageRestant"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="navbar-right">
+    <button class="toggle-view-btn" *ngIf="hasActiveProjet()" (click)="toggleViewMode()">
+      <i class="bi" [ngClass]="isAllVoyagesView ? 'bi-folder2' : 'bi-grid-3x3-gap'"></i>
+      <span>{{ getButtonText() }}</span>
+    </button>
+
+    <div class="notifications-icon" routerLink="/notifications" title="Notifications">
+      <i class="bi bi-bell"></i>
+      <span class="badge" *ngIf="notificationsCount > 0">{{ notificationsCount }}</span>
+    </div>
+    
+    <div class="user-section">
+      <div class="user-info">
+        <i class="bi bi-person-circle"></i>
+        <span class="user-name">Utilisateur</span>
+      </div>
+      <button class="logout-btn" (click)="logout()" title="Se déconnecter">
+        <i class="bi bi-box-arrow-right"></i>
+        <span>Déconnexion</span>
+      </button>
+    </div>
+  </div>
+</header>

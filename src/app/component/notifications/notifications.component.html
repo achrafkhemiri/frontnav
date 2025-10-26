@@ -1,0 +1,238 @@
+<app-navbar 
+  [isSidebarOpen]="isSidebarOpen" 
+  [sidebarWidth]="220" 
+  [sidebarClosedWidth]="70">
+</app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <i class="bi bi-bell"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Notifications</h1>
+          <p class="page-subtitle" *ngIf="stats">{{ stats.nonLues }} notification(s) non lue(s) sur {{ stats.total }}</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="action-btn secondary" (click)="basculerNonLues()">
+          <i class="bi" [ngClass]="afficherSeulementNonLues ? 'bi-list-ul' : 'bi-filter'"></i>
+          <span>{{ afficherSeulementNonLues ? 'Afficher toutes' : 'Non lues uniquement' }}</span>
+        </button>
+        <button class="action-btn primary" (click)="marquerToutesCommeLues()" [disabled]="!stats || stats.nonLues === 0">
+          <i class="bi bi-check2-all"></i>
+          <span>Tout marquer lu</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid" *ngIf="stats">
+      <div class="stat-card total">
+        <div class="stat-icon"><i class="bi bi-inbox"></i></div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.total }}</div>
+          <div class="stat-label">Total</div>
+        </div>
+      </div>
+      <div class="stat-card nonlues">
+        <div class="stat-icon"><i class="bi bi-bell"></i></div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.nonLues }}</div>
+          <div class="stat-label">Non lues</div>
+        </div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-icon"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.danger }}</div>
+          <div class="stat-label">Urgent</div>
+        </div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-icon"><i class="bi bi-exclamation-circle"></i></div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.warning }}</div>
+          <div class="stat-label">Alerte</div>
+        </div>
+      </div>
+      <div class="stat-card info">
+        <div class="stat-icon"><i class="bi bi-info-circle"></i></div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.info }}</div>
+          <div class="stat-label">Info</div>
+        </div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.success }}</div>
+          <div class="stat-label">Succès</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="toolbar-section">
+      <div class="filters-group">
+        <button class="filter-btn" [class.active]="filtre === 'TOUS'" (click)="changerFiltre('TOUS')">
+          <i class="bi bi-list"></i>
+          <span>Tous</span>
+        </button>
+        <button class="filter-btn" [class.active]="filtre === 'DANGER'" (click)="changerFiltre('DANGER')">
+          <i class="bi bi-exclamation-triangle"></i>
+          <span>Urgent</span>
+        </button>
+        <button class="filter-btn" [class.active]="filtre === 'WARNING'" (click)="changerFiltre('WARNING')">
+          <i class="bi bi-exclamation-circle"></i>
+          <span>Alerte</span>
+        </button>
+        <button class="filter-btn" [class.active]="filtre === 'INFO'" (click)="changerFiltre('INFO')">
+          <i class="bi bi-info-circle"></i>
+          <span>Info</span>
+        </button>
+        <button class="filter-btn" [class.active]="filtre === 'SUCCESS'" (click)="changerFiltre('SUCCESS')">
+          <i class="bi bi-check-circle"></i>
+          <span>Succès</span>
+        </button>
+      </div>
+      <button class="refresh-btn" (click)="chargerNotifications()">
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+    </div>
+
+    <!-- Loading State -->
+    <div *ngIf="chargement" class="loading-state">
+      <div class="spinner"></div>
+      <p>Chargement des notifications...</p>
+    </div>
+
+    <!-- Notifications List -->
+    <div class="notifications-list" *ngIf="!chargement">
+      <!-- Empty State -->
+      <div *ngIf="notifications.length === 0 && stats?.total !== undefined" class="empty-state">
+        <i class="bi bi-inbox"></i>
+        <p>Aucune notification</p>
+      </div>
+
+      <!-- Error State -->
+      <div *ngIf="notifications.length === 0 && stats?.total === undefined" class="empty-state">
+        <i class="bi bi-exclamation-triangle" style="font-size: 3rem; color: #ef4444;"></i>
+        <h3>Erreur de connexion</h3>
+        <p>Impossible de charger les notifications. Vérifiez que le serveur est démarré.</p>
+        <button class="action-btn primary" (click)="chargerNotifications()">
+          <i class="bi bi-arrow-clockwise"></i>
+          Réessayer
+        </button>
+      </div>
+
+      <div class="notification-card" 
+           *ngFor="let n of notifications" 
+           [class.lue]="n.lu"
+           [class.danger]="n.niveau === 'DANGER'"
+           [class.warning]="n.niveau === 'WARNING'"
+           [class.info]="n.niveau === 'INFO'"
+           [class.success]="n.niveau === 'SUCCESS'"
+           (click)="marquerCommeLue(n)">
+        <div class="notification-badge" [ngClass]="'badge-' + n.niveau.toLowerCase()">
+          <i class="bi" [ngClass]="{
+            'bi-exclamation-triangle-fill': n.niveau === 'DANGER',
+            'bi-exclamation-circle-fill': n.niveau === 'WARNING',
+            'bi-info-circle-fill': n.niveau === 'INFO',
+            'bi-check-circle-fill': n.niveau === 'SUCCESS'
+          }"></i>
+        </div>
+        <div class="notification-content">
+          <div class="notification-message">{{ n.message }}</div>
+          <div class="notification-meta">
+            <span class="meta-item">
+              <i class="bi bi-clock"></i>
+              {{ n.dateCreation | date:'short' }}
+            </span>
+            <span class="meta-item" *ngIf="n.entiteType">
+              <i class="bi bi-tag"></i>
+              {{ n.entiteType }} #{{ n.entiteId }}
+            </span>
+            <span class="meta-item" *ngIf="n.lu">
+              <i class="bi bi-check2"></i>
+              Lu
+            </span>
+            <span class="meta-item critical" *ngIf="n.deletable === false" title="Notification critique non supprimable">
+              <i class="bi bi-lock-fill"></i>
+              Protégée
+            </span>
+          </div>
+        </div>
+        <button 
+          class="delete-btn" 
+          [class.disabled]="n.deletable === false"
+          [title]="n.deletable === false ? 'Cette notification est protégée et ne peut pas être supprimée' : 'Supprimer'"
+          (click)="ouvrirModalSuppression(n); $event.stopPropagation();">
+          <i class="bi" [ngClass]="n.deletable === false ? 'bi-lock-fill' : 'bi-trash'"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal de Confirmation de Suppression -->
+<div class="modal-overlay" *ngIf="showDeleteModal" (click)="fermerModalSuppression()">
+  <div class="modal-content" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h2>
+        <i class="bi" [ngClass]="notificationToDelete?.deletable === false ? 'bi-lock-fill' : 'bi-trash'"></i>
+        Supprimer la notification
+      </h2>
+      <button class="modal-close" (click)="fermerModalSuppression()">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+    
+    <div class="modal-body">
+      <div *ngIf="notificationToDelete?.deletable === false" class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div>
+          <strong>⚠️ Notification Critique Protégée</strong>
+          <p>Cette notification a été créée automatiquement lors d'une opération de suppression de voyage ou déchargement.</p>
+          <p><strong>Elle ne peut pas être supprimée</strong> car elle est essentielle pour la traçabilité des opérations critiques.</p>
+        </div>
+      </div>
+      
+      <div *ngIf="notificationToDelete?.deletable !== false" class="alert alert-info">
+        <i class="bi bi-info-circle-fill"></i>
+        <div>
+          <p>Êtes-vous sûr de vouloir supprimer cette notification ?</p>
+          <div class="notification-preview" *ngIf="notificationToDelete && notificationToDelete.message">
+            <strong>Message :</strong>
+            <p>{{ notificationToDelete.message!.substring(0, 150) }}{{ notificationToDelete.message!.length > 150 ? '...' : '' }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="fermerModalSuppression()">
+        <i class="bi bi-x-circle"></i>
+        Annuler
+      </button>
+      <button 
+        *ngIf="notificationToDelete?.deletable !== false"
+        class="btn-danger" 
+        (click)="confirmerSuppression()">
+        <i class="bi bi-trash"></i>
+        Supprimer
+      </button>
+      <button 
+        *ngIf="notificationToDelete?.deletable === false"
+        class="btn-primary" 
+        (click)="fermerModalSuppression()">
+        <i class="bi bi-check-lg"></i>
+        Compris
+      </button>
+    </div>
+  </div>
+</div>

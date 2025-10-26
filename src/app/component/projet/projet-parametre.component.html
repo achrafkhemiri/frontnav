@@ -1,0 +1,118 @@
+<app-navbar 
+  [isSidebarOpen]="isSidebarOpen" 
+  [sidebarWidth]="280" 
+  [sidebarClosedWidth]="75">
+</app-navbar>
+
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Header avec titre et informations projet -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="header-icon">
+          <i class="bi bi-gear-fill"></i>
+        </div>
+        <div class="header-text">
+          <h1 class="page-title">Paramètres du projet</h1>
+          <ng-container *ngIf="projet; else headerPlaceholder">
+            <p class="page-subtitle badges-row">
+              <span class="info-badge" *ngIf="projet.nomNavire">
+                <i class="bi bi-truck-front"></i>
+                <span class="badge-label">Navire</span>
+                <span class="badge-value">{{ projet.nomNavire }}</span>
+              </span>
+              <span class="info-badge" *ngIf="projet.port">
+                <i class="bi bi-geo-alt"></i>
+                <span class="badge-label">Port</span>
+                <span class="badge-value">{{ projet.port }}</span>
+              </span>
+              <span class="info-badge" *ngIf="projet.nomProduit">
+                <i class="bi bi-box"></i>
+                <span class="badge-label">Produit</span>
+                <span class="badge-value">{{ projet.nomProduit }}</span>
+              </span>
+              <span class="info-badge" *ngIf="societesList.length">
+                <i class="bi bi-building"></i>
+                <span class="badge-label">Sociétés :</span>
+                <span class="badge-value">{{ societesList.join(', ') }}</span>
+              </span>
+            </p>
+          </ng-container>
+          <ng-template #headerPlaceholder>
+            <p class="page-subtitle">Gérez les différents modules de votre projet</p>
+          </ng-template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid de cartes modules -->
+    <div class="modules-grid">
+      <!-- Récapitulatif / Chargement / Déchargement quick cards -->
+      <div class="module-card">
+        <div class="card-icon-wrapper">
+          <i class="bi bi-clipboard-data text-primary"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Récapitulatif</h3>
+          <p class="card-description">Vue d'ensemble du projet</p>
+        </div>
+        <a [routerLink]="['/voyage']" class="card-action">
+          <span>Voir le récapitulatif</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      <div class="module-card">
+        <div class="card-icon-wrapper">
+          <i class="bi bi-box-arrow-in-down text-success"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Order de Chargement</h3>
+          <p class="card-description">Suivre les orders de chargements</p>
+        </div>
+        <a [routerLink]="['/chargement']" class="card-action">
+          <span>Gérer les orders de chargements</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+      <div class="module-card">
+        <div class="card-icon-wrapper">
+          <i class="bi bi-box-arrow-up text-warning"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">Bon de chargement</h3>
+          <p class="card-description">Suivre les bons de chargement</p>
+        </div>
+        <a [routerLink]="['/dechargement']" class="card-action">
+          <span>Gérer les bons de chargement</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+  <div class="module-card" *ngFor="let card of cards">
+        <div class="card-icon-wrapper">
+          <i class="bi {{card.icon}} {{card.color}}"></i>
+        </div>
+        <div class="card-content">
+          <h3 class="card-title">{{card.title}}</h3>
+          <p class="card-description">Gérer les {{card.title.toLowerCase()}}</p>
+        </div>
+        <a [routerLink]="card.dynamic ? ['/projet', projetId, 'voyages'] : [card.link]" 
+           class="card-action">
+          <span>{{card.text}}</span>
+          <i class="bi bi-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+
+    <!-- Section informations supplémentaires -->
+    <div class="info-section">
+      <div class="info-card">
+        <i class="bi bi-info-circle"></i>
+        <div>
+          <h4>Besoin d'aide ?</h4>
+          <p>Chaque module vous permet de gérer un aspect spécifique de votre projet.</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
