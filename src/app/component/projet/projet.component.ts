@@ -444,7 +444,7 @@ export class ProjetComponent {
                 // Maintenant ajouter le nouveau projet
                 this.projets.push(projetAjoute!);
                 this.projetActifService.setProjetActif(projetAjoute!);
-                console.log('✅ Nouveau projet actif défini:', projetAjoute);
+                // console.log('✅ Nouveau projet actif défini:', projetAjoute);
               })
               .catch((err) => {
                 console.error('❌ Erreur lors de la désactivation des projets:', err);
@@ -537,15 +537,15 @@ export class ProjetComponent {
     // car this.selectedProjet sera mis à null avant que le callback async ne termine
     const projetEnCoursDeMiseAJour = { ...this.selectedProjet };
     const projetEstActive = this.selectedProjet.active;
-    console.log('🔧 updateProjet() - Projet:', projetEnCoursDeMiseAJour.nomProduit, 'ID:', projetEnCoursDeMiseAJour.id, 'Active:', projetEstActive);
+    // console.log('🔧 updateProjet() - Projet:', projetEnCoursDeMiseAJour.nomProduit, 'ID:', projetEnCoursDeMiseAJour.id, 'Active:', projetEstActive);
     
     // Si le projet modifié est actif, désactive les autres
     if (projetEstActive) {
-      console.log('🔄 Désactivation des autres projets...');
+      // console.log('🔄 Désactivation des autres projets...');
       this.projets.forEach(pr => {
         if (pr.active && pr.id !== projetEnCoursDeMiseAJour.id) {
           pr.active = false;
-          console.log('  ❌ Désactivation du projet:', pr.nomProduit, 'ID:', pr.id);
+          // console.log('  ❌ Désactivation du projet:', pr.nomProduit, 'ID:', pr.id);
           if (pr.id) {
             this.projetService.updateProjet(pr.id, pr, 'body').subscribe();
           }
@@ -569,43 +569,43 @@ export class ProjetComponent {
 
     this.projetService.updateProjet(projetEnCoursDeMiseAJour.id!, payload, 'body').subscribe({
       next: async (updated) => {
-        console.log('✅ Projet mis à jour:', updated);
-        console.log('🔍 projetEstActive:', projetEstActive, 'projetEnCoursDeMiseAJour:', projetEnCoursDeMiseAJour);
+        // console.log('✅ Projet mis à jour:', updated);
+        // console.log('🔍 projetEstActive:', projetEstActive, 'projetEnCoursDeMiseAJour:', projetEnCoursDeMiseAJour);
         
         // Si le projet est activé, mettre à jour le service ProjetActifService
         if (projetEstActive && projetEnCoursDeMiseAJour) {
-          console.log('🔄 Traitement du projet actif...');
+          // console.log('🔄 Traitement du projet actif...');
           let projetUpdated: any = updated;
           
           // Gérer le cas où updated est un Blob
           if (updated instanceof Blob) {
-            console.log('📦 Blob détecté, parsing...');
+            // console.log('📦 Blob détecté, parsing...');
             const text = await updated.text();
-            console.log('📄 Texte brut du Blob:', text);
+            // console.log('📄 Texte brut du Blob:', text);
             try {
               projetUpdated = JSON.parse(text);
-              console.log('✅ Projet parsé:', projetUpdated);
+              // console.log('✅ Projet parsé:', projetUpdated);
             } catch (e) {
               console.error('❌ Erreur parsing projet:', e);
               projetUpdated = projetEnCoursDeMiseAJour;
             }
           } else {
-            console.log('✅ Pas de Blob, projet déjà en objet');
+            // console.log('✅ Pas de Blob, projet déjà en objet');
           }
           
-          console.log('🔥 Appel setProjetActif avec:', projetUpdated);
+          // console.log('🔥 Appel setProjetActif avec:', projetUpdated);
           
           // 🔥 IMPORTANT : Nettoyer le sessionStorage pour éviter les conflits
           window.sessionStorage.removeItem('projetActifId');
           
           // Mettre à jour le service avec le projet complet
           this.projetActifService.setProjetActif(projetUpdated);
-          console.log('✅ Projet actif mis à jour:', projetUpdated);
+          // console.log('✅ Projet actif mis à jour:', projetUpdated);
           
           // 🔥 Forcer une seconde émission après un court délai pour s'assurer que tous les composants reçoivent la notification
           setTimeout(() => {
             this.projetActifService.setProjetActif(projetUpdated);
-            console.log('🔄 Émission forcée du projet actif');
+            // console.log('🔄 Émission forcée du projet actif');
           }, 100);
         } else {
           console.warn('⚠️ Projet non activé ou selectedProjet null - pas de mise à jour du service');
@@ -724,7 +724,7 @@ export class ProjetComponent {
           this.selectedProjet = null;
           
           // Afficher un message de succès
-          console.log(`✅ Projet « ${nom} » supprimé avec succès`);
+          // console.log(`✅ Projet « ${nom} » supprimé avec succès`);
         },
         error: async (err) => {
           // Améliorer l'affichage des erreurs HTTP
@@ -799,17 +799,17 @@ export class ProjetComponent {
 
   // Charge toutes les déclarations et les groupe par projetId
   loadAllDeclarations(): void {
-    console.log('🔄 Chargement des déclarations...');
+    // console.log('🔄 Chargement des déclarations...');
     this.declarationService.getAllDeclarations().subscribe({
       next: async (data) => {
-        console.log('✅ Déclarations reçues (raw):', data);
-        console.log('✅ Type de data:', typeof data, 'isArray:', Array.isArray(data));
+        // console.log('✅ Déclarations reçues (raw):', data);
+        // console.log('✅ Type de data:', typeof data, 'isArray:', Array.isArray(data));
         
         // Gérer le cas où data est un Blob
         let declarations: DeclarationDTO[] = [];
         if (data instanceof Blob) {
           const text = await data.text();
-          console.log('📄 Blob text:', text);
+          // console.log('📄 Blob text:', text);
           try {
             const json = JSON.parse(text);
             if (Array.isArray(json)) {
@@ -826,7 +826,7 @@ export class ProjetComponent {
           return;
         }
         
-        console.log('✅ Déclarations parsées:', declarations);
+        // console.log('✅ Déclarations parsées:', declarations);
         this.allDeclarations = declarations;
         
         if (declarations.length === 0) {
@@ -838,13 +838,13 @@ export class ProjetComponent {
         // Grouper les déclarations par projetId
         this.declarationsByProjet.clear();
         declarations.forEach((decl, index) => {
-          console.log(`  📄 Déclaration ${index + 1}:`, {
-            id: decl.id,
-            numero: decl.numeroDeclaration,
-            quantite: decl.quantiteManifestee,
-            projetId: decl.projetId,
-            projetIdType: typeof decl.projetId
-          });
+          // console.log(`  📄 Déclaration ${index + 1}:`, {
+          //   id: decl.id,
+          //   numero: decl.numeroDeclaration,
+          //   quantite: decl.quantiteManifestee,
+          //   projetId: decl.projetId,
+          //   projetIdType: typeof decl.projetId
+          // });
           if (decl.projetId !== undefined && decl.projetId !== null) {
             // Convertir en number pour être sûr
             const pid = Number(decl.projetId);
@@ -854,8 +854,8 @@ export class ProjetComponent {
             this.declarationsByProjet.get(pid)?.push(decl);
           }
         });
-        console.log('📊 Déclarations par projet:', this.declarationsByProjet);
-        console.log('📊 Map keys:', Array.from(this.declarationsByProjet.keys()));
+        // console.log('📊 Déclarations par projet:', this.declarationsByProjet);
+        // console.log('📊 Map keys:', Array.from(this.declarationsByProjet.keys()));
       },
       error: (err) => {
         console.error('❌ Erreur chargement déclarations:', err);
@@ -867,7 +867,7 @@ export class ProjetComponent {
   getDeclarationsForProjet(projetId?: number): DeclarationDTO[] {
     if (projetId === undefined) return [];
     const declarations = this.declarationsByProjet.get(projetId) || [];
-    console.log(`📄 Déclarations pour projet ${projetId}:`, declarations);
+    // console.log(`📄 Déclarations pour projet ${projetId}:`, declarations);
     return declarations;
   }
 

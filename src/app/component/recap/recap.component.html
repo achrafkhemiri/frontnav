@@ -85,7 +85,7 @@
               </span>
               <span class="meta-item">
                 <i class="bi bi-box-seam"></i>
-                Quantité totale: <strong>{{ getQuantiteAutorisee(selectedClient.id) | number:'1.0-2' }} kg</strong>
+                Quantité totale: <strong>{{ getQuantiteAutorisee(selectedClient.id) }} kg</strong>
               </span>
               <!-- Per-code autorisation breakdown (styled) -->
               <div *ngIf="getClientAutorisations(selectedClient.id).length > 0" class="autorisation-section">
@@ -100,12 +100,12 @@
                       </div>
                       <div class="stat">
                         <div class="stat-label">Vendu</div>
-                        <div class="stat-value sold">{{ getTotalLivreClientForCode(selectedClient.id, a.code) | number:'1.0-2' }} kg</div>
+                        <div class="stat-value sold">{{ getTotalLivreClientForCode(selectedClient.id, a.code)  }} kg</div>
                       </div>
                       <div class="stat">
                         <div class="stat-label">Reste</div>
                         <div class="stat-value" [ngClass]="getResteClientForCode(selectedClient.id, a.code) >= 0 ? 'positive' : 'negative'">
-                          {{ getResteClientForCode(selectedClient.id, a.code) | number:'1.0-2' }} kg
+                          {{ getResteClientForCode(selectedClient.id, a.code)  }} kg
                         </div>
                       </div>
                     </div>
@@ -137,7 +137,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-label">Total Livré</div>
-              <div class="stat-value">{{ getTotalLivre() | number:'1.0-2' }} kg</div>
+              <div class="stat-value">{{ getTotalLivre()  }} kg</div>
             </div>
           </div>
           <div class="stat-card">
@@ -147,7 +147,7 @@
             <div class="stat-info">
               <div class="stat-label">Reste</div>
               <div class="stat-value" [style.color]="getResteColor()">
-                {{ getReste() | number:'1.0-2' }} kg
+                {{ getReste()  }} kg
               </div>
             </div>
           </div>
@@ -300,7 +300,7 @@
               <td>{{ getChauffeurNom(voyage.chauffeurId) }}</td>
               <td>
                 <span class="poids-badge" style="display:flex; align-items:center; gap:8px;">
-                  <span>{{ voyage.poidsClient | number:'1.0-2' }}</span>
+                  <span>{{ voyage.poidsClient  }}</span>
                   <small *ngIf="$any(voyage).autorisationCode || $any(voyage).autorisation?.code" class="code-badge" style="background:#eef2ff; color:#3730a3; padding:2px 6px; border-radius:6px; font-weight:700; font-size:12px;">{{ $any(voyage).autorisationCode || $any(voyage).autorisation?.code }}</small>
                 </span>
               </td>
@@ -310,11 +310,11 @@
                       [style.color]="'white'">
                   <!-- show per-code remainder when voyage has a code -->
                   <ng-container *ngIf="$any(voyage).autorisationCode || $any(voyage).autorisation?.code; else overallReste">
-                    {{ getResteCumuleForVoyageByCode(voyage, i) | number:'1.0-2' }}
+                    {{ getResteCumuleForVoyageByCode(voyage, i)  }}
                     <i *ngIf="getResteCumuleForVoyageByCode(voyage, i) < 0" class="bi bi-exclamation-triangle-fill" style="margin-left: 6px;"></i>
                   </ng-container>
                   <ng-template #overallReste>
-                    {{ getResteCumule(voyage, i) | number:'1.0-2' }}
+                    {{ getResteCumule(voyage, i)  }}
                     <i *ngIf="getResteCumule(voyage, i) < 0" class="bi bi-exclamation-triangle-fill" style="margin-left: 6px;"></i>
                   </ng-template>
                 </span>
@@ -336,12 +336,12 @@
               </td>
               <td>
                 <span class="total-badge">
-                  {{ getTotalLivre() | number:'1.0-2' }} kg
+                  {{ getTotalLivre()  }} kg
                 </span>
               </td>
               <td>
                 <span class="total-badge" [style.color]="getResteColor()">
-                  {{ getReste() | number:'1.0-2' }} kg
+                  {{ getReste()  }} kg
                 </span>
               </td>
             </tr>

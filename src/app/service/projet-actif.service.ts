@@ -27,12 +27,12 @@ export class ProjetActifService {
   }
 
   setProjetActif(projet: any) {
-    console.log('🔥 ProjetActifService.setProjetActif() appelé avec:', projet);
+    // console.log('🔥 ProjetActifService.setProjetActif() appelé avec:', projet);
     this.projetActif = projet;
     localStorage.setItem(this.STORAGE_KEY, JSON.stringify(projet));
-    console.log('💾 Projet sauvegardé dans localStorage');
+    // console.log('💾 Projet sauvegardé dans localStorage');
     this.projetActifSubject.next(projet);
-    console.log('📡 Notification émise aux abonnés');
+    // console.log('📡 Notification émise aux abonnés');
     // Assurer l'UI en mode "vue projet" quand un projet actif est défini
     this.setViewMode(false);
   }

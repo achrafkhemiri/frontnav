@@ -569,6 +569,30 @@ export class VoyageComponent {
     return quantite - livre;
   }
 
+  // Calculer le reste pour un client+code AU MOMENT d'un voyage donné (somme cumulative jusqu'à la date du voyage)
+  // retourne quantiteAutorisee - totalLivreJusquAuVoyage
+  getResteClientForCodeUpToVoyage(voyage?: VoyageDTO): number {
+    if (!voyage) return 0;
+    const clientId = voyage.clientId;
+    const code = this.getVoyageAutorisationCode(voyage);
+    if (!clientId || !code) return 0;
+
+    const voyageDate = voyage.date ? new Date(voyage.date).getTime() : Date.now();
+
+    const totalLivreJusquA = this.voyages
+      .filter(v => v.clientId === clientId)
+      .filter(v => {
+        const codeOnVoyage = (v.autorisationCode as string) || ((v as any).autorisation?.code as string) || undefined;
+        if (codeOnVoyage !== code) return false;
+        const vDate = v.date ? new Date(v.date).getTime() : 0;
+        return vDate <= voyageDate;
+      })
+      .reduce((s, v) => s + (v.poidsClient || 0), 0);
+
+    const quantiteAutorisee = this.getQuantiteAutoriseeForCode(clientId, code);
+    return quantiteAutorisee - totalLivreJusquA;
+  }
+
   // Obtenir le nom et le CIN d'un chauffeur
   getChauffeurInfo(chauffeurId: number | undefined): string {
     if (!chauffeurId) return '-';
@@ -1277,7 +1301,7 @@ export class VoyageComponent {
       error: (err) => {
         console.error('Erreur création voyage:', err);
         const backendMsg = (typeof err.error === 'string') ? err.error : (err.error?.message || err.message);
-        this.error = 'Erreur ajout: ' + (backendMsg || 'Erreur inconnue');
+        this.error = 'num ticket ou num BL déja utilisé';
       }
     });
   }
@@ -2423,26 +2447,27 @@ Suppression d'un voyage:
 
     // Ajouter l'en-tête avec les informations
     let currentRow = 0;
-    XLSX.utils.sheet_add_aoa(ws, [['LISTE DES VOYAGES']], { origin: { r: currentRow, c: 0 } });
-    ws['!merges'] = ws['!merges'] || [];
-    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+  XLSX.utils.sheet_add_aoa(ws, [['LISTE DES VOYAGES']], { origin: { r: currentRow, c: 0 } });
+  ws['!merges'] = ws['!merges'] || [];
+  // ajusté pour inclure colonnes Autorisation et Reste Autorisation
+  ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 14 } });
     currentRow++;
 
     if (navires) {
       XLSX.utils.sheet_add_aoa(ws, [[`Navire: ${navires}`]], { origin: { r: currentRow, c: 0 } });
-      ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+  ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 14 } });
       currentRow++;
     }
 
     if (ports) {
       XLSX.utils.sheet_add_aoa(ws, [[`Port: ${ports}`]], { origin: { r: currentRow, c: 0 } });
-      ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+  ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 14 } });
       currentRow++;
     }
 
     if (produits) {
       XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${produits}`]], { origin: { r: currentRow, c: 0 } });
-      ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 12 } });
+  ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 14 } });
       currentRow++;
     }
 
@@ -2478,7 +2503,10 @@ Suppression d'un voyage:
       const camion = this.camions.find(c => c.id === voyage.camionId);
       const client = this.clients.find(c => c.id === voyage.clientId);
       const depot = this.depots.find(d => d.id === voyage.depotId);
-      
+  // Obtenir le code d'autorisation (s'il existe) et le reste pour ce code (cumulatif jusqu'au voyage)
+  const autorisationCode = this.getVoyageAutorisationCode(voyage);
+  const resteAutorisation = (voyage.clientId && autorisationCode) ? this.getResteClientForCodeUpToVoyage(voyage) : 0;
+
       return {
         'N° Bon de Livraison': voyage.numBonLivraison || '',
         'N° Ticket': voyage.numTicket || '',
@@ -2491,6 +2519,9 @@ Suppression d'un voyage:
         'Client': client?.nom || '',
         'N° Client': client?.numero || '',
         'Poids Client (kg)': voyage.poidsClient || 0,
+        // ajouter autorisation et reste par code
+        'Autorisation': autorisationCode || '',
+        'Reste Autorisation (kg)': resteAutorisation,
         'Reste (kg)': this.getResteForVoyage(voyage),
         'Société': voyage.societeP || ''
       };
@@ -2557,8 +2588,10 @@ Suppression d'un voyage:
       { wch: 25 }, // Client
       { wch: 15 }, // N° Client
       { wch: 15 }, // Poids Client
-      { wch: 12 }, // Reste
-      { wch: 22 }  // Société (dernière colonne)
+      { wch: 18 }, // Reste Ticket (kg)
+      { wch: 12 }, // Reste (kg)
+      { wch: 22 }, // Société (dernière colonne)
+      { wch: 18 }  // (réservé) -- si besoin
     ];
     ws['!cols'] = columnWidths;
 
@@ -2648,7 +2681,9 @@ Suppression d'un voyage:
       const camion = this.camions.find(c => c.id === voyage.camionId);
       const client = this.clients.find(c => c.id === voyage.clientId);
       const depot = this.depots.find(d => d.id === voyage.depotId);
-      
+      const autorisationCode = this.getVoyageAutorisationCode(voyage);
+      const resteTicket = autorisationCode && voyage.clientId ? Math.round(this.getResteClientForCodeUpToVoyage(voyage)) : 0;
+
       return [
         voyage.numBonLivraison || '',
         voyage.numTicket || '',
@@ -2661,6 +2696,8 @@ Suppression d'un voyage:
         client?.nom || '',
         client?.numero || '',
         Math.round(voyage.poidsClient || 0).toString(),
+        autorisationCode || '',
+        resteTicket.toString(),
         Math.round(this.getResteForVoyage(voyage)).toString(),
         voyage.societeP || ''
       ];
@@ -2681,6 +2718,8 @@ Suppression d'un voyage:
         'Client',
         'N° Client',
         'Poids Client',
+        'Autorisation',
+        'Reste Autorisation',
         'Reste',
         'Société'
       ]],
@@ -2688,7 +2727,8 @@ Suppression d'un voyage:
       theme: 'grid',
       styles: {
         fontSize: 7,
-        cellPadding: 2,
+        cellPadding: 1,
+        // permettre le retour à la ligne pour afficher les noms complets
         overflow: 'linebreak',
         halign: 'left'
       },
@@ -2696,22 +2736,25 @@ Suppression d'un voyage:
         fillColor: [102, 126, 234],
         textColor: 255,
         fontStyle: 'bold',
-        halign: 'center'
+        halign: 'center',
+        fontSize: 7
       },
       columnStyles: {
-        0: { cellWidth: 18 },  // N° Bon
-        1: { cellWidth: 15 },  // N° Ticket
-        2: { cellWidth: 25 },  // Date
-        3: { cellWidth: 25 },  // Chauffeur
-        4: { cellWidth: 18 },  // Camion
-        5: { cellWidth: 25 },  // Transporteur
-        6: { cellWidth: 25, fillColor: [254, 243, 199] },  // Dépôt (jaune)
-        7: { cellWidth: 18, fillColor: [254, 243, 199], halign: 'right' },  // Poids Dépôt (jaune)
-        8: { cellWidth: 30, fillColor: [209, 250, 229] },  // Client (vert)
-        9: { cellWidth: 18, fillColor: [209, 250, 229] },  // N° Client (vert)
-        10: { cellWidth: 18, fillColor: [209, 250, 229], halign: 'right' },  // Poids Client (vert)
-        11: { cellWidth: 16, halign: 'right' },  // Reste
-        12: { cellWidth: 25 }   // Société
+        0: { cellWidth: 16 },  // N° Bon
+        1: { cellWidth: 12 },  // N° Ticket
+        2: { cellWidth: 22 },  // Date
+        3: { cellWidth: 18 },  // Chauffeur
+        4: { cellWidth: 14 },  // Camion
+        5: { cellWidth: 20 },  // Transporteur
+        6: { cellWidth: 20, fillColor: [254, 243, 199] },  // Dépôt (jaune)
+        7: { cellWidth: 12, fillColor: [254, 243, 199], halign: 'right' },  // Poids Dépôt (jaune)
+        8: { cellWidth: 24, fillColor: [209, 250, 229] },  // Client (vert)
+        9: { cellWidth: 12, fillColor: [209, 250, 229] },  // N° Client (vert)
+        10: { cellWidth: 12, fillColor: [209, 250, 229], halign: 'right' },  // Poids Client (vert)
+        11: { cellWidth: 26, halign: 'left' }, // code autorisation
+        12: { cellWidth: 18, halign: 'right', fontStyle: 'bold' },  // Reste Ticket (kg)
+        13: { cellWidth: 14, halign: 'right' },  // Reste
+        14: { cellWidth: 28 }   // Société (augmentée pour tenir le nom complet)
       },
       alternateRowStyles: {
         fillColor: [245, 247, 250]

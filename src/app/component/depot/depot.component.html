@@ -209,14 +209,14 @@
             <td class="text-center" *ngIf="isProjetActif()">
               <span class="quantity-badge quantity-badge-primary" style="cursor: pointer;" (click)="openEditQuantiteModal(dep)" title="Cliquer pour modifier">
                 <i class="bi bi-archive-fill"></i>
-                <span class="quantity-value">{{ dep.quantiteAutorisee | number:'1.0-2' }}</span>
+                <span class="quantity-value">{{ dep.quantiteAutorisee  }}</span>
                 <i class="bi bi-pencil-fill" style="margin-left: 6px; font-size: 11px;"></i>
               </span>
             </td>
             <td class="text-center" *ngIf="isProjetActif()">
               <span class="quantity-badge quantity-badge-info">
                 <i class="bi bi-box-seam-fill"></i>
-                <span class="quantity-value">{{ getQuantiteLivree(dep) | number:'1.0-2' }}</span>
+                <span class="quantity-value">{{ getQuantiteLivree(dep)  }}</span>
               </span>
             </td>
             <td class="text-center" *ngIf="isProjetActif()">
@@ -230,13 +230,13 @@
                   'bi-exclamation-triangle-fill': getReste(dep) === 0,
                   'bi-x-circle-fill': getReste(dep) < 0
                 }"></i>
-                <span class="quantity-value">{{ getReste(dep) | number:'1.0-2' }}</span>
+                <span class="quantity-value">{{ getReste(dep)  }}</span>
               </span>
             </td>
             <td class="text-center" *ngIf="!isProjetActif()">
               <span class="quantity-badge">
                 <i class="bi bi-box-seam-fill"></i>
-                <span class="quantity-value">{{ getQuantiteLivree(dep) | number:'1.0-2' }}</span>
+                <span class="quantity-value">{{ getQuantiteLivree(dep)  }}</span>
               </span>
             </td>
             <td class="actions-cell">
@@ -518,7 +518,7 @@
       />
       <p class="quantite-hint" *ngIf="editingDepot">
         <i class="bi bi-info-circle"></i> 
-        La quantité actuelle est de {{ editingDepot.quantiteAutorisee | number:'1.0-2' }} kg
+        La quantité actuelle est de {{ editingDepot.quantiteAutorisee  }} kg
       </p>
     </div>
     

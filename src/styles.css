@@ -5,3 +5,18 @@
 /* Import global layout styles */
 @import './styles-layout.css';
 @import './styles-table.css';
+
+/* Global zoom at 80% for the entire application */
+html {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  zoom: 0.8;
+  transform-origin: top left;
+}

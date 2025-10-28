@@ -481,7 +481,8 @@ export class ClientComponent {
     this.quantiteAutorisee = 0;
     // Default to autorisation mode for new associations (per new data model)
     this.addAutorisationMode = true;
-    this.addingAutorisation = [];
+    // Initialize with one default autorisation row (code '1' per request)
+    this.addingAutorisation = [{ code: '1', quantite: 0 }];
     this.showQuantiteModal = true;
   }
   
@@ -497,7 +498,7 @@ export class ClientComponent {
 
     // We only support Autorisations when adding a client to a projet
     const autorisations = (this.addingAutorisation || [])
-      .map(a => ({ code: (a.code && a.code.trim()) ? a.code.trim() : 'DEFAULT', quantite: Number(a.quantite) || 0 }))
+      .map(a => ({ code: (a.code && a.code.trim()) ? a.code.trim() : '1', quantite: Number(a.quantite) || 0 }))
       .filter(a => a.quantite > 0);
 
     if (!autorisations.length) {
@@ -521,12 +522,74 @@ export class ClientComponent {
   const body = { autorisation: autorisations, quantiteAutorisee: totalToAdd };
         this.projetService.addClientToProjet(targetProjetId, clientId, body).subscribe({
           next: (res) => {
+            // close modal first
             this.closeQuantiteModal();
+
+            // prepare success UI text
             const projet = this.contextProjet || this.projetActif;
             const nomProjet = projet?.nom || `Projet ${targetProjetId}`;
-            this.showTemporaryAlert(`Le client a été ajouté avec succès au projet "${nomProjet}".`, 'success');
-            this.loadClients();
-            this.loadVoyages();
+
+            // Attempt to persist the per-code autorisations similarly to the edit flow.
+            // The add endpoint may not attach the autorisation array in the same format,
+            // so we explicitly call the projet-client autorisation endpoint after creation.
+            const tryUpdateAutorisations = (projetClientId?: number) => {
+              if (projetClientId) {
+                // write autorisations for the created projet-client
+                this.http.put(
+                  `${this.basePath}/api/projet-client/${projetClientId}/autorisation`,
+                  autorisations,
+                  { observe: 'body', responseType: 'json' as 'json', withCredentials: true }
+                ).subscribe({
+                  next: () => {
+                    this.showTemporaryAlert(`Le client a été ajouté avec succès au projet "${nomProjet}".`, 'success');
+                    this.loadClients();
+                    this.loadVoyages();
+                  },
+                  error: (err) => {
+                    console.warn('⚠️ Autorisations non écrites immédiatement, rechargement forcé', err);
+                    this.showTemporaryAlert(`Le client a été ajouté au projet (autorisation non confirmée).`, 'warning');
+                    this.loadClients();
+                    this.loadVoyages();
+                  }
+                });
+              } else {
+                // fallback: query the projet-client list and find the entry for this client
+                this.http.get<any[]>(`${this.basePath}/api/projet-client/projet/${targetProjetId}`, { withCredentials: true }).subscribe({
+                  next: (list) => {
+                    const found = Array.isArray(list) ? list.find((p: any) => p.clientId === clientId) : null;
+                    if (found && found.id) {
+                      this.http.put(
+                        `${this.basePath}/api/projet-client/${found.id}/autorisation`,
+                        autorisations,
+                        { observe: 'body', responseType: 'json' as 'json', withCredentials: true }
+                      ).subscribe({ next: () => { this.showTemporaryAlert(`Le client a été ajouté avec succès au projet "${nomProjet}".`, 'success'); this.loadClients(); this.loadVoyages(); }, error: () => { this.showTemporaryAlert(`Le client a été ajouté au projet (autorisation non confirmée).`, 'warning'); this.loadClients(); this.loadVoyages(); } });
+                    } else {
+                      // couldn't find the created projet-client - still reload
+                      this.showTemporaryAlert(`Le client a été ajouté au projet "${nomProjet}".`, 'success');
+                      this.loadClients();
+                      this.loadVoyages();
+                    }
+                  },
+                  error: () => {
+                    this.showTemporaryAlert(`Le client a été ajouté au projet "${nomProjet}".`, 'success');
+                    this.loadClients();
+                    this.loadVoyages();
+                  }
+                });
+              }
+            };
+
+            // Try to extract the newly created projet-client id from the response
+            let projetClientId: number | undefined;
+            try {
+              if (res && typeof res === 'object') {
+                projetClientId = (res as any).id || (res as any).projetClientId || (res as any).projetClient?.id;
+              }
+            } catch (e) {
+              projetClientId = undefined;
+            }
+
+            tryUpdateAutorisations(projetClientId);
           },
           error: async (err) => {
             console.error('Erreur association client-projet:', err);
@@ -559,10 +622,46 @@ export class ClientComponent {
   const body = { autorisation: autorisations, quantiteAutorisee: totalToAdd };
         this.projetService.addClientToProjet(targetProjetId, clientId, body).subscribe({
           next: (res) => {
+            // close modal first
             this.closeQuantiteModal();
-            this.showTemporaryAlert('Le client a été ajouté (vérifiez la validité côté serveur).', 'success');
-            this.loadClients();
-            this.loadVoyages();
+
+            const projet = this.contextProjet || this.projetActif;
+            const nomProjet = projet?.nom || `Projet ${targetProjetId}`;
+
+            // same post-write autorisation attempt as in main path
+            let projetClientId: number | undefined;
+            try {
+              if (res && typeof res === 'object') {
+                projetClientId = (res as any).id || (res as any).projetClientId || (res as any).projetClient?.id;
+              }
+            } catch (e) { projetClientId = undefined; }
+
+            const tryUpdateAutorisations = (projetClientId?: number) => {
+              if (projetClientId) {
+                this.http.put(
+                  `${this.basePath}/api/projet-client/${projetClientId}/autorisation`,
+                  autorisations,
+                  { observe: 'body', responseType: 'json' as 'json', withCredentials: true }
+                ).subscribe({ next: () => { this.showTemporaryAlert(`Le client a été ajouté avec succès au projet "${nomProjet}".`, 'success'); this.loadClients(); this.loadVoyages(); }, error: () => { this.showTemporaryAlert(`Le client a été ajouté au projet (autorisation non confirmée).`, 'warning'); this.loadClients(); this.loadVoyages(); } });
+              } else {
+                this.http.get<any[]>(`${this.basePath}/api/projet-client/projet/${targetProjetId}`, { withCredentials: true }).subscribe({ next: (list) => {
+                  const found = Array.isArray(list) ? list.find((p: any) => p.clientId === clientId) : null;
+                  if (found && found.id) {
+                    this.http.put(
+                      `${this.basePath}/api/projet-client/${found.id}/autorisation`,
+                      autorisations,
+                      { observe: 'body', responseType: 'json' as 'json', withCredentials: true }
+                    ).subscribe({ next: () => { this.showTemporaryAlert(`Le client a été ajouté avec succès au projet "${nomProjet}".`, 'success'); this.loadClients(); this.loadVoyages(); }, error: () => { this.showTemporaryAlert(`Le client a été ajouté au projet (autorisation non confirmée).`, 'warning'); this.loadClients(); this.loadVoyages(); } });
+                  } else {
+                    this.showTemporaryAlert(`Le client a été ajouté au projet "${nomProjet}".`, 'success');
+                    this.loadClients();
+                    this.loadVoyages();
+                  }
+                }, error: () => { this.showTemporaryAlert(`Le client a été ajouté au projet "${nomProjet}".`, 'success'); this.loadClients(); this.loadVoyages(); } });
+              }
+            };
+
+            tryUpdateAutorisations(projetClientId);
           },
           error: async (err) => {
             console.error('Erreur association client-projet (fallback):', err);
@@ -1146,6 +1245,41 @@ export class ClientComponent {
         doc.text(`Produit: ${this.projetActif.nomProduit}`, 14, yPos);
         yPos += 6;
       }
+      // Afficher les sociétés si disponibles (projet.societeNoms peut être Set ou array)
+      const societesSet = (this.projetActif && (this.projetActif.societeNoms)) ? this.projetActif.societeNoms : null;
+      let societesStr = '';
+      if (societesSet) {
+        try {
+          societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', ');
+        } catch {
+          societesStr = String(societesSet);
+        }
+      }
+      if (societesStr) {
+        doc.text(`Sociétés: ${societesStr}`, 14, yPos);
+        // add a slightly larger margin after societes for better visual separation
+        yPos += 6;
+      }
+      // Afficher la date de début du projet si disponible
+      if (this.projetActif && (this.projetActif as any).dateDebut) {
+        try {
+          doc.text(`Date début projet: ${this.formatDate((this.projetActif as any).dateDebut)}`, 14, yPos);
+          yPos += 6;
+        } catch {}
+      }
+      // Afficher la date de début/fin du filtre si présente
+      if (this.dateDebut) {
+        try {
+          doc.text(`Date début: ${this.formatDate(this.dateDebut)}`, 14, yPos);
+          yPos += 6;
+        } catch {}
+      }
+      if (this.dateFin) {
+        try {
+          doc.text(`Date fin: ${this.formatDate(this.dateFin)}`, 14, yPos);
+          yPos += 6;
+        } catch {}
+      }
     }
 
     // Statistiques
@@ -1160,7 +1294,7 @@ export class ClientComponent {
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    let statsY = this.projetActif ? 45 : 25;
+    let statsY = this.projetActif ? 60 : 30;
     doc.text(`Total Clients: ${totalClients}`, 14, statsY);
     doc.text(`Quantité Totale: ${totalQuantiteAutorisee.toFixed(0)} T`, 70, statsY);
     doc.text(`Total Enlevé: ${totalEnleve.toFixed(2)} T`, 140, statsY);
@@ -1183,26 +1317,49 @@ export class ClientComponent {
     }
 
     // Préparer les données du tableau
-    const tableData = this.filteredClients.map(client => {
-      const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
-      const totalLivre = this.getTotalLivreClient(client.id);
-      const reste = quantiteAutorisee - totalLivre;
-      
-      return [
-        client.nom || '-',
-        client.numero || '-',
-        client.adresse || '-',
-        client.mf || '-',
-        quantiteAutorisee.toFixed(0),
-        totalLivre.toFixed(2),
-        reste.toFixed(2)
-      ];
+    // On génère une ligne par client+autorisation pour afficher le code et le reste spécifique
+    const tableData: any[] = [];
+    this.filteredClients.forEach(client => {
+      const autorisations = (client && (client as any).autorisation) ? (client as any).autorisation : [];
+      if (Array.isArray(autorisations) && autorisations.length > 0) {
+        autorisations.forEach((a: any) => {
+          const code = a.code || 'DEFAULT';
+          const quantiteAutorisee = Number(a.quantite || 0);
+          const totalLivre = this.getTotalLivreForClientCode(client.id, code);
+          const reste = quantiteAutorisee - totalLivre;
+          tableData.push([
+            client.nom || '-',
+            client.numero || '-',
+            client.adresse || '-',
+            client.mf || '-',
+            code,
+            quantiteAutorisee.toFixed(0),
+            totalLivre.toFixed(2),
+            reste.toFixed(2)
+          ]);
+        });
+      } else {
+        // fallback: single line with project-level totals
+        const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+        const totalLivre = this.getTotalLivreClient(client.id);
+        const reste = quantiteAutorisee - totalLivre;
+        tableData.push([
+          client.nom || '-',
+          client.numero || '-',
+          client.adresse || '-',
+          client.mf || '-',
+          '-',
+          quantiteAutorisee.toFixed(0),
+          totalLivre.toFixed(2),
+          reste.toFixed(2)
+        ]);
+      }
     });
 
     // Générer le tableau
     autoTable(doc, {
       startY: statsY + 10,
-      head: [['Nom', 'Numéro', 'Adresse', 'MF', 'Qté Autorisée (T)', 'Enlevé (T)', 'Reste (T)']],
+      head: [['Nom', 'Numéro', 'Adresse', 'MF', 'code ticket d\'autorisation', 'Quantité Autorisée (kg)', 'Enlevé (kg)', 'Reste (kg)']],
       body: tableData,
       theme: 'grid',
       styles: {
@@ -1216,13 +1373,14 @@ export class ClientComponent {
         fontSize: 10
       },
       columnStyles: {
-        0: { cellWidth: 40 },
-        1: { cellWidth: 30 },
+        0: { cellWidth: 36 },
+        1: { cellWidth: 24 },
         2: { cellWidth: 50 },
-        3: { cellWidth: 30 },
-        4: { cellWidth: 30, halign: 'right' },
-        5: { cellWidth: 25, halign: 'right' },
-        6: { cellWidth: 25, halign: 'right' }
+        3: { cellWidth: 28 },
+        4: { cellWidth: 28 },
+        5: { cellWidth: 26, halign: 'right' },
+        6: { cellWidth: 26, halign: 'right' },
+        7: { cellWidth: 26, halign: 'right' }
       },
       didDrawPage: (data) => {
         // Footer
@@ -1246,39 +1404,128 @@ export class ClientComponent {
 
   // Export Excel
   exportToExcel(): void {
-    // Préparer les données
-    const data = this.filteredClients.map(client => {
-      const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
-      const totalLivre = this.getTotalLivreClient(client.id);
-      const reste = quantiteAutorisee - totalLivre;
-      
-      return {
-        'Nom': client.nom || '-',
-        'Numéro': client.numero || '-',
-        'Adresse': client.adresse || '-',
-        'MF': client.mf || '-',
-        'Quantité Autorisée (T)': quantiteAutorisee.toFixed(0),
-        'Enlevé (T)': totalLivre.toFixed(2),
-        'Reste (T)': reste.toFixed(2)
-      };
+    // Préparer les données: une ligne par client+autorisation pour montrer le code et le reste par ticket
+    const data: any[] = [];
+    this.filteredClients.forEach(client => {
+      const autorisations = (client && (client as any).autorisation) ? (client as any).autorisation : [];
+      if (Array.isArray(autorisations) && autorisations.length > 0) {
+        autorisations.forEach((a: any) => {
+          const code = a.code || 'DEFAULT';
+          const quantiteAutorisee = Number(a.quantite || 0);
+          const totalLivre = this.getTotalLivreForClientCode(client.id, code);
+          const reste = quantiteAutorisee - totalLivre;
+          data.push({
+            'Nom': client.nom || '-',
+            'Numéro': client.numero || '-',
+            'Adresse': client.adresse || '-',
+            'MF': client.mf || '-',
+            'code ticket d\'autorisation': code,
+            'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(0),
+            'Enlevé (kg)': totalLivre.toFixed(2),
+            'Reste (kg)': reste.toFixed(2)
+          });
+        });
+      } else {
+        const quantiteAutorisee = this.getQuantitePourProjet(client) || 0;
+        const totalLivre = this.getTotalLivreClient(client.id);
+        const reste = quantiteAutorisee - totalLivre;
+        data.push({
+          'Nom': client.nom || '-',
+          'Numéro': client.numero || '-',
+          'Adresse': client.adresse || '-',
+          'MF': client.mf || '-',
+          'code ticket d\'autorisation': '-',
+          'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(0),
+          'Enlevé (kg)': totalLivre.toFixed(2),
+          'Reste (kg)': reste.toFixed(2)
+        });
+      }
     });
 
-    // Créer la feuille de calcul
-    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(data);
+    // Créer la feuille de calcul en ajoutant un en-tête projet puis les données
+    const wb: XLSX.WorkBook = XLSX.utils.book_new();
+    const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+    ws['!merges'] = ws['!merges'] || [];
+    let currentRow = 0;
 
-    // Définir la largeur des colonnes
+    // Titre principal
+    XLSX.utils.sheet_add_aoa(ws, [[`LISTE DES CLIENTS`]], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+    currentRow++;
+
+    // Informations du projet (navire / port / produit / projet)
+    const projet = this.contextProjet || this.projetActif;
+    if (projet) {
+      if (projet.nomNavire) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Navire: ${projet.nomNavire}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+        currentRow++;
+      }
+      if (projet.port) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Port: ${projet.port}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+        currentRow++;
+      }
+      if (projet.nomProduit) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${projet.nomProduit}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+        currentRow++;
+      }
+      if (projet.nom) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Projet: ${projet.nom}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+        currentRow++;
+      }
+      // Sociétés du projet si disponibles
+      const societesSet = projet && projet.societeNoms ? projet.societeNoms : null;
+      let societesStr = '';
+      if (societesSet) {
+        try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); }
+      }
+      if (societesStr) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Sociétés: ${societesStr}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+        currentRow++;
+      }
+      // Date début du projet si disponible
+      if (projet && (projet as any).dateDebut) {
+        try {
+          XLSX.utils.sheet_add_aoa(ws, [[`Date début projet: ${this.formatDate((projet as any).dateDebut)}`]], { origin: { r: currentRow, c: 0 } });
+          ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+          currentRow++;
+        } catch {}
+      }
+      // Dates filtre si présentes
+      if (this.dateDebut) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Date début: ${this.formatDate(this.dateDebut)}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+        currentRow++;
+      }
+      if (this.dateFin) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Date fin: ${this.formatDate(this.dateFin)}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+        currentRow++;
+      }
+    }
+
+    // Ligne vide
+    currentRow++;
+
+    // Ajouter les données à partir de currentRow
+    XLSX.utils.sheet_add_json(ws, data, { origin: { r: currentRow, c: 0 } });
+
+    // Définir la largeur des colonnes (ajout de la colonne code autorisation)
     ws['!cols'] = [
       { wch: 30 }, // Nom
       { wch: 15 }, // Numéro
       { wch: 40 }, // Adresse
       { wch: 20 }, // MF
-      { wch: 20 }, // Quantité Autorisée
-      { wch: 15 }, // Enlevé
-      { wch: 15 }  // Reste
+      { wch: 20 }, // code ticket d'autorisation
+      { wch: 20 }, // Quantité Autorisée (kg)
+      { wch: 15 }, // Enlevé (kg)
+      { wch: 15 }  // Reste (kg)
     ];
 
-    // Créer le classeur
-    const wb: XLSX.WorkBook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Clients');
 
     // Ajouter une feuille de statistiques
@@ -1439,7 +1686,7 @@ export class ClientComponent {
     if (!this.editingAutorisation || this.editingAutorisation.length === 0) {
       const initialQty = this.newQuantiteAutorisee || 0;
       if (initialQty > 0) {
-        this.editingAutorisation = [{ code: 'DEFAULT', quantite: initialQty }];
+        this.editingAutorisation = [{ code: '1', quantite: initialQty }];
       } else {
         this.editingAutorisation = [];
       }
@@ -1448,7 +1695,7 @@ export class ClientComponent {
 
   addAutorisationRow() {
     if (!this.editingAutorisation) this.editingAutorisation = [];
-    this.editingAutorisation.push({ code: '', quantite: 0 });
+    this.editingAutorisation.push({ code: '1', quantite: 0 });
   }
 
   removeAutorisationRow(index: number) {
@@ -1465,6 +1712,12 @@ export class ClientComponent {
   getAddingAutorisationTotal(): number {
     if (!this.addingAutorisation || this.addingAutorisation.length === 0) return 0;
     return this.addingAutorisation.reduce((s, a) => s + (Number(a.quantite) || 0), 0);
+  }
+
+  // Helper to add a new autorisation row in the ADD modal (default code '1')
+  addAddingAutorisationRow() {
+    if (!this.addingAutorisation) this.addingAutorisation = [];
+    this.addingAutorisation.push({ code: '1', quantite: 0 });
   }
 
   cancelEditQuantite() {

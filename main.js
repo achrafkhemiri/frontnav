@@ -11,7 +11,7 @@ const os = require('os');
 try {
   if (protocol && protocol.registerSchemesAsPrivileged) {
     protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { secure: true, standard: true } }]);
-    console.log('Registered privileged scheme: app');
+    // console.log('Registered privileged scheme: app');
   }
 } catch (e) {
   console.warn('registerSchemesAsPrivileged failed at startup:', e && e.message);
@@ -34,7 +34,7 @@ try {
     try { app.setPath && app.setPath('userData', forced); } catch(e) { console.warn('setPath failed', e && e.message); }
     try { userDataPath = forced; } catch(e) { /* ignore */ }
     try { app.commandLine && app.commandLine.appendSwitch && app.commandLine.appendSwitch('user-data-dir', forced); } catch(e) { console.warn('appendSwitch user-data-dir failed', e && e.message); }
-    console.log('Forcing userData to', forced);
+    // console.log('Forcing userData to', forced);
     try { fs.mkdirSync(forced, { recursive: true }); } catch(e) {}
   }
 } catch (e) {
@@ -44,7 +44,7 @@ function writeStartupLog(msg) {
   try {
     const p = userDataPath ? path.join(userDataPath, 'navire-startup.log') : null;
     const entry = `[${new Date().toISOString()}] ${msg}\n`;
-    console.log(entry);
+    // console.log(entry);
     logBuffer += entry;
     if (p) fs.appendFileSync(p, entry, 'utf8');
   } catch (e) {
@@ -261,13 +261,13 @@ app.whenReady().then(async () => {
   }
   // Resolve backendPath to use for spawning (fallback to dev path if not packaged)
   const backendPath = backendPathFound || path.join(__dirname, '..', 'navire', 'target', 'navire-0.0.1-SNAPSHOT.jar');
-  console.log('Starting backend jar:', backendPath);
+  // console.log('Starting backend jar:', backendPath);
   const backendCwd = fs.existsSync(backendPath) ? path.dirname(backendPath) : null;
   // Vérifier si le port 8086 est déjà occupé (par ex. backend déjà lancé). Si oui, on n'essaie pas de lancer un second backend.
   try {
     const portTaken = await isPortOpen('127.0.0.1', 8086, 1000);
     if (portTaken) {
-      console.log('Port 8086 déjà occupé, on suppose qu\'un backend est déjà en cours d\'exécution. Ouverture de la fenêtre.');
+      // console.log('Port 8086 déjà occupé, on suppose qu\'un backend est déjà en cours d\'exécution. Ouverture de la fenêtre.');
       createWindow();
     } else {
       // spawn le backend et écouter ses logs; hide the java console window on Windows
@@ -279,7 +279,7 @@ app.whenReady().then(async () => {
 
         backendProcess.stdout.on('data', (data) => {
           const text = data.toString();
-          console.log(`[backend stdout] ${text}`);
+          // console.log(`[backend stdout] ${text}`);
           const entry = `[STDOUT ${new Date().toISOString()}] ${text}`;
           logBuffer += entry;
           if (logWindow) logWindow.webContents.send('log-update', entry);
@@ -293,7 +293,7 @@ app.whenReady().then(async () => {
         });
         backendProcess.on('exit', (code, signal) => {
           const entry = `[EXIT ${new Date().toISOString()}] code=${code} signal=${signal}\n`;
-          console.log(`Backend process exited with code=${code} signal=${signal}`);
+          // console.log(`Backend process exited with code=${code} signal=${signal}`);
           logBuffer += entry;
           if (logWindow) logWindow.webContents.send('log-update', entry);
         });
@@ -302,7 +302,7 @@ app.whenReady().then(async () => {
           // attend que le backend accepte les connexions sur le port 8086
           const PORT_WAIT_MS = 60000; // 60s
           await waitForPort('127.0.0.1', 8086, PORT_WAIT_MS);
-          console.log('Backend disponible sur le port 8086, ouverture de la fenêtre');
+          // console.log('Backend disponible sur le port 8086, ouverture de la fenêtre');
           createWindow();
         } catch (err) {
           console.error('Backend n\'a pas répondu dans le délai imparti:', err);
@@ -316,13 +316,13 @@ app.whenReady().then(async () => {
     // fallback: spawn quand même
     backendProcess = spawn('java', ['-jar', backendPath], { cwd: backendCwd, windowsHide: false });
     backendProcess.stdout.on('data', (data) => {
-      console.log(`[backend stdout] ${data.toString()}`);
+      // console.log(`[backend stdout] ${data.toString()}`);
     });
     backendProcess.stderr.on('data', (data) => {
       console.error(`[backend stderr] ${data.toString()}`);
     });
     backendProcess.on('exit', (code, signal) => {
-      console.log(`Backend process exited with code=${code} signal=${signal}`);
+      // console.log(`Backend process exited with code=${code} signal=${signal}`);
     });
     createWindow();
   }

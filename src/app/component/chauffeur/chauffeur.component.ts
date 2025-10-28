@@ -3,6 +3,8 @@ import { ChauffeurControllerService } from '../../api/api/chauffeurController.se
 import { ChauffeurDTO } from '../../api/model/chauffeurDTO';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { ProjetActifService } from '../../service/projet-actif.service';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmCodeDialogComponent } from '../../shared/confirm-code-dialog.component';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 
 @Component({
@@ -40,10 +42,20 @@ export class ChauffeurComponent {
   
   Math = Math;
 
+  // Modal de confirmation/erreur (comme pour Depot)
+  showConfirmModal: boolean = false;
+  showErrorModal: boolean = false;
+  modalTitle: string = '';
+  modalMessage: string = '';
+  modalIcon: string = '';
+  modalIconColor: string = '';
+  chauffeurToDelete: number | null = null;
+
   constructor(
     private chauffeurService: ChauffeurControllerService,
     private projetService: ProjetControllerService,
-    private projetActifService: ProjetActifService
+    private projetActifService: ProjetActifService,
+    private dialog: MatDialog
   ) {
     // 🔥 Écouter les changements du projet actif
     this.projetActifService.projetActif$.subscribe(projet => {
@@ -70,6 +82,79 @@ export class ChauffeurComponent {
       this.loadProjetDetails(this.contextProjetId, true);
     }
     this.loadChauffeurs();
+  }
+
+  requestDeleteChauffeur(id?: number) {
+    if (id === undefined) return;
+
+    // ouvrir la boîte de dialogue de code (même UX que Depot)
+    const dialogRef = this.dialog.open(ConfirmCodeDialogComponent, { disableClose: true });
+    dialogRef.afterClosed().subscribe((ok: boolean) => {
+      if (ok === true) {
+        this.chauffeurToDelete = id;
+        this.showConfirmModal = true;
+        this.modalTitle = 'Confirmer la suppression';
+        this.modalMessage = 'Êtes-vous sûr de vouloir supprimer ce chauffeur ? Cette action est irréversible.';
+        this.modalIcon = 'bi-trash-fill';
+        this.modalIconColor = '#ef4444';
+      }
+    });
+  }
+
+  async confirmDelete() {
+    if (this.chauffeurToDelete === null) return;
+
+    this.chauffeurService.deleteChauffeur(this.chauffeurToDelete, 'body').subscribe({
+      next: () => {
+        this.showConfirmModal = false;
+        this.chauffeurToDelete = null;
+        this.loadChauffeurs();
+      },
+      error: async (err: any) => {
+        console.error('Erreur suppression chauffeur:', err);
+        this.showConfirmModal = false;
+        this.showErrorModal = true;
+        this.modalTitle = 'Erreur de suppression';
+
+        // Prefer a clear message when backend returns 400 (entity used in voyages)
+        if (err && err.status === 400) {
+          this.modalMessage = 'Impossible de supprimer : ce chauffeur est référencé dans un ou plusieurs voyages.';
+        } else if (err && err.status === 403) {
+          this.modalMessage = 'Vous n\'avez pas les permissions nécessaires pour supprimer ce chauffeur.';
+        } else {
+          // Try to extract a meaningful message from backend, fallback to generic
+          let errorMessage = 'Une erreur est survenue lors de la suppression.';
+          if (err && err.error instanceof Blob) {
+            try {
+              const text = await err.error.text();
+              if (text && text.trim()) errorMessage = text;
+            } catch (e) {
+              console.error('Erreur parsing blob error:', e);
+            }
+          } else if (err && err.error?.message) {
+            errorMessage = err.error.message;
+          } else if (err && err.message) {
+            errorMessage = err.message;
+          }
+
+          // If the raw error contains DB constraint hints, translate to user-friendly text
+          const errorText = JSON.stringify(err || '');
+          if (errorText.includes('foreign key') || errorText.includes('constraint') || errorText.includes('DataIntegrityViolationException')) {
+            errorMessage = 'Impossible de supprimer : ce chauffeur est référencé dans un ou plusieurs voyages.';
+          }
+
+          this.modalMessage = errorMessage;
+        }
+
+        this.modalIcon = 'bi-x-circle-fill';
+        this.modalIconColor = '#ef4444';
+      }
+    });
+  }
+
+  cancelDelete() {
+    this.showConfirmModal = false;
+    this.chauffeurToDelete = null;
   }
 
   // 🔥 Méthode pour recharger toutes les données
@@ -184,15 +269,17 @@ export class ChauffeurComponent {
   }
 
   updateChauffeur() {
-    if (!this.selectedChauffeur?.id) return;
-    this.chauffeurService.createChauffeur(this.selectedChauffeur, 'body').subscribe({
+    // Use the dialog model for updates (dialogChauffeur is bound to the inputs)
+    if (!this.dialogChauffeur?.id) return;
+    const id = this.dialogChauffeur.id;
+    this.chauffeurService.updateChauffeur(id, this.dialogChauffeur, 'body').subscribe({
       next: (updated) => {
-        const idx = this.chauffeurs.findIndex(c => c.id === updated.id);
-        if (idx > -1) this.chauffeurs[idx] = updated;
-        this.filteredChauffeurs = [...this.chauffeurs];
-        this.updatePagination();
+        // Some backends may return blob/text; to ensure UI is up-to-date we reload the list
+        // This guarantees the updated values are reflected without requiring a full page reload.
+        this.loadChauffeurs();
         this.selectedChauffeur = null;
         this.editMode = false;
+        this.showAddDialog = false;
       },
       error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
     });

@@ -16,6 +16,12 @@
           <p class="page-subtitle">{{ filteredCamions.length }} camion(s) trouvé(s)</p>
         </div>
       </div>
+      <div style="display: flex; gap: 12px;">
+        <button class="add-btn" (click)="openAddDialog()" title="Ajouter un nouveau camion">
+          <i class="bi bi-plus-lg"></i>
+          <span>Ajouter un camion</span>
+        </button>
+      </div>
     </div>
 
     <div *ngIf="error" class="error">{{ error }}</div>
@@ -79,6 +85,11 @@
                 }"></i>
               </div>
             </th> -->
+            <th class="text-center">
+              <div class="th-content">
+                <span>Actions</span>
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -86,9 +97,17 @@
             <td class="id-cell">{{ cam.id }}</td>
             <td>{{ cam.matricule }}</td>
             <!-- <td>{{ cam.societe }}</td> -->
+            <td class="actions-cell">
+              <button class="action-btn edit-btn" (click)="editCamion(cam)" title="Modifier">
+                <i class="bi bi-pencil-fill"></i>
+              </button>
+              <button class="action-btn delete-btn" (click)="requestDeleteCamion(cam.id)" title="Supprimer">
+                <i class="bi bi-trash-fill"></i>
+              </button>
+            </td>
           </tr>
           <tr *ngIf="paginatedCamions.length === 0" class="no-data-row">
-            <td colspan="2">
+            <td colspan="3">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p>Aucun camion trouvé</p>
@@ -133,11 +152,50 @@
       <div class="dialog-modal" (click)="$event.stopPropagation()">
         <h3>{{ editMode ? 'Modifier le camion' : 'Ajouter un camion' }}</h3>
         <input [(ngModel)]="dialogCamion.matricule" placeholder="Matricule" />
-        <input [(ngModel)]="dialogCamion.societe" placeholder="Société" />
-        <input [(ngModel)]="dialogCamion.numBonLivraison" placeholder="Numéro bon de livraison" />
+        <!-- <input [(ngModel)]="dialogCamion.societe" placeholder="Société" />
+        <input [(ngModel)]="dialogCamion.numBonLivraison" placeholder="Numéro bon de livraison" /> -->
         <div class="dialog-actions">
           <button (click)="editMode ? updateCamion() : saveCamion()">{{ editMode ? 'Enregistrer' : 'Ajouter' }}</button>
           <button (click)="cancel()">Annuler</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Modal de confirmation de suppression (comme Depot) -->
+    <div class="dialog-backdrop" *ngIf="showConfirmModal" (click)="cancelDelete()">
+      <div class="confirm-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header-confirm">
+          <i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+          <h3>{{ modalTitle }}</h3>
+        </div>
+        <div class="modal-body-confirm">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-actions-confirm">
+          <button class="btn-cancel" (click)="cancelDelete()">
+            <i class="bi bi-x-lg"></i>
+            Annuler
+          </button>
+          <button class="btn-confirm-delete" (click)="confirmDelete()">
+            <i class="bi bi-trash-fill"></i>
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal d'erreur -->
+    <div class="dialog-backdrop" *ngIf="showErrorModal" (click)="showErrorModal = false">
+      <div class="confirm-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header-confirm">
+          <i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+          <h3>{{ modalTitle }}</h3>
+        </div>
+        <div class="modal-body-confirm">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-actions-confirm">
+          <button class="btn-cancel" (click)="showErrorModal = false">Fermer</button>
         </div>
       </div>
     </div>

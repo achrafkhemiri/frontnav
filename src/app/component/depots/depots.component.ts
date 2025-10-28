@@ -40,10 +40,10 @@ export class DepotsComponent {
       next: async (data) => {
         if (data instanceof Blob) {
           const text = await data.text();
-          console.log('getAllDepots - blob text:', text);
+          // console.log('getAllDepots - blob text:', text);
           try {
             const json = JSON.parse(text);
-            console.log('getAllDepots - parsed json:', json);
+            // console.log('getAllDepots - parsed json:', json);
             if (Array.isArray(json)) {
               this.depots = json;
             } else {
@@ -54,10 +54,10 @@ export class DepotsComponent {
             this.depots = [];
           }
         } else if (Array.isArray(data)) {
-          console.log('getAllDepots - json array, length:', data.length);
+          // console.log('getAllDepots - json array, length:', data.length);
           this.depots = data;
         } else {
-          console.log('getAllDepots - unexpected response:', data);
+          // console.log('getAllDepots - unexpected response:', data);
           this.depots = [];
         }
         this.filteredDepots = this.depots;

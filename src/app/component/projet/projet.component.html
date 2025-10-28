@@ -71,10 +71,10 @@
 		<!-- Liste des projets en cards avec FLIP ANIMATION -->
 		<div class="row g-4 mb-4">
 			<div *ngFor="let pr of paginatedProjets" class="col-md-6 col-lg-4">
-				<!-- Container avec perspective pour l'effet 3D -->
-				<div class="projet-card-container">
+					<!-- Container avec perspective pour l'effet 3D -->
+					<div class="projet-card-container" (click)="toggleCardFlip(pr)">
 					<!-- Carte avec 2 faces (avant/arrière) -->
-					<div class="projet-card" [class.active-project]="pr.active">
+						<div class="projet-card" [class.flipped]="pr.isFlipped" [class.active-project]="pr.active">
 						
 						<!-- ========== FACE AVANT ========== -->
 						<div class="projet-card-front">
@@ -158,8 +158,8 @@
 							</div>
 						</div>
 						
-						<!-- ========== FACE ARRIÈRE (DÉCLARATIONS + DATES) - Masquée car flip désactivé ========== -->
-						<div class="projet-card-back" style="display: none;">
+						<!-- ========== FACE ARRIÈRE (DÉCLARATIONS + DATES) ========== -->
+						<div class="projet-card-back " >
 							<div class="back-header">
 								<h3>
 									<i class="bi bi-file-earmark-text"></i>
@@ -531,7 +531,7 @@
 											<input 
 												[(ngModel)]="newProjet.quantiteTotale" 
 												name="quantiteTotale" 
-												type="number" 
+												type="text" 
 												step="100"
 												min="0"
 												class="form-control modern-input" 
@@ -586,9 +586,7 @@
 													<input 
 														[(ngModel)]="declaration.quantiteManifestee" 
 														[name]="'quantiteDeclaration' + i" 
-														type="number" 
-														step="0.01"
-														min="0"
+														type="text" 
 														class="form-control modern-input" 
 														placeholder="Ex: 1500.50" />
 												</div>
@@ -881,9 +879,7 @@
 									[(ngModel)]="selectedProjet.quantiteTotale" 
 									name="editQuantiteTotale" 
 									id="editQuantiteTotale" 
-									type="number" 
-									step="0.01"
-									min="0.01"
+									type="text" 
 									class="form-control" 
 									placeholder="Ex: 1000"
 									required />

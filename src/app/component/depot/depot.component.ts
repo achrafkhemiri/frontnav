@@ -132,7 +132,7 @@ export class DepotComponent {
   ) {
     // 🔥 Écouter les changements du projet actif
     this.projetActifService.projetActif$.subscribe(projet => {
-      console.log('📡 [Depot] Notification reçue - Nouveau projet:', projet);
+      // console.log('📡 [Depot] Notification reçue - Nouveau projet:', projet);
       
       if (projet && projet.id) {
         const previousId = this.projetActifId;
@@ -141,7 +141,7 @@ export class DepotComponent {
         
         // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
         if (!previousId || previousId !== projet.id) {
-          console.log('🔄 [Depot] Rechargement - previousId:', previousId, 'newId:', projet.id);
+          // console.log('🔄 [Depot] Rechargement - previousId:', previousId, 'newId:', projet.id);
           setTimeout(() => {
             this.reloadData();
           }, 50);
@@ -279,7 +279,7 @@ export class DepotComponent {
           // Trier par ID décroissant (du plus récent au plus ancien)
           this.allDepots = data.sort((a, b) => (b.id || 0) - (a.id || 0));
         }
-        console.log('AllDepots chargés et triés pour autocomplétion:', this.allDepots.length);
+        // console.log('AllDepots chargés et triés pour autocomplétion:', this.allDepots.length);
       },
       error: (err) => {
         console.error('Erreur chargement allDepots:', err);
@@ -354,7 +354,7 @@ export class DepotComponent {
     
     // Si un dépôt existant a été sélectionné, demander la quantité
     if (this.selectedExistingDepot && this.selectedExistingDepot.id) {
-      console.log('Association dépôt existant:', this.selectedExistingDepot.id, 'au projet:', targetProjetId);
+      // console.log('Association dépôt existant:', this.selectedExistingDepot.id, 'au projet:', targetProjetId);
       if (targetProjetId) {
         // Stocker l'ID du dépôt en attente et ouvrir la modal de quantité
         this.pendingDepotId = this.selectedExistingDepot.id;
@@ -366,11 +366,11 @@ export class DepotComponent {
     }
     
     // Créer un nouveau dépôt puis demander la quantité
-    console.log('Création nouveau depot - payload:', this.dialogDepot);
+    // console.log('Création nouveau depot - payload:', this.dialogDepot);
 
     this.depotService.createDepot(this.dialogDepot, 'body').subscribe({
       next: async (created) => {
-        console.log('Réponse création depot (raw):', created);
+        // console.log('Réponse création depot (raw):', created);
 
         let createdId: number | null = null;
         
@@ -378,7 +378,7 @@ export class DepotComponent {
           const text = await created.text();
           try {
             const parsed = JSON.parse(text);
-            console.log('Réponse création depot (parsed):', parsed);
+            // console.log('Réponse création depot (parsed):', parsed);
             createdId = parsed?.id;
           } catch (e) {
             console.error('Erreur parsing création depot:', e);
@@ -432,7 +432,7 @@ export class DepotComponent {
 
     this.projetDepotService.createProjetDepot(projetDepot, 'body').subscribe({
       next: () => {
-        console.log('✅ ProjetDepot créé avec quantité:', this.quantiteAutorisee);
+        // console.log('✅ ProjetDepot créé avec quantité:', this.quantiteAutorisee);
         this.showAlert = true;
         this.alertType = 'success';
         this.alertMessage = `Dépôt ajouté avec succès (Quantité: ${this.quantiteAutorisee} kg)`;
@@ -500,7 +500,7 @@ export class DepotComponent {
 
           // Remove orphan depot if needed
           if (this.pendingDepotId) {
-            console.log('Suppression du dépôt orphelin:', this.pendingDepotId);
+            // console.log('Suppression du dépôt orphelin:', this.pendingDepotId);
             this.depotService.deleteDepot(this.pendingDepotId, 'body').subscribe({
               next: () => console.log('Dépôt orphelin supprimé'),
               error: (delErr) => console.error('Erreur suppression dépôt orphelin:', delErr)
@@ -565,7 +565,7 @@ export class DepotComponent {
     }
     
     this.filteredDepots = depotsFiltrés;
-    console.log(`📊 applyFilter() - ${this.filteredDepots.length} dépôts après filtrage`);
+    // console.log(`📊 applyFilter() - ${this.filteredDepots.length} dépôts après filtrage`);
     this.updatePagination();
   }
 
@@ -746,7 +746,7 @@ export class DepotComponent {
     // Utiliser depotService.deleteDepot qui utilise la bonne méthode backend
     this.depotService.deleteDepot(this.depotToDelete, 'body').subscribe({
       next: () => {
-        console.log('✅ Dépôt supprimé avec succès');
+        // console.log('✅ Dépôt supprimé avec succès');
         this.showConfirmModal = false;
         this.depotToDelete = null;
         this.loadDepots();
@@ -805,7 +805,7 @@ export class DepotComponent {
 
   loadDepots() {
     const targetProjetId = this.contextProjetId || this.projetActifId;
-    console.log('📊 loadDepots() - contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId, 'targetProjetId:', targetProjetId);
+    // console.log('📊 loadDepots() - contextProjetId:', this.contextProjetId, 'projetActifId:', this.projetActifId, 'targetProjetId:', targetProjetId);
     
     if (!targetProjetId) {
       console.warn('⚠️ Aucun projet actif - liste des dépôts vide');
@@ -818,7 +818,7 @@ export class DepotComponent {
     // Charger les ProjetDepot pour ce projet
     this.projetDepotService.getProjetDepotsByProjetId(targetProjetId, 'body').subscribe({
       next: async (data: any) => {
-        console.log('✅ Réponse getProjetDepotsByProjetId:', data);
+        // console.log('✅ Réponse getProjetDepotsByProjetId:', data);
         
         if (data instanceof Blob) {
           const text = await data.text();
@@ -837,7 +837,7 @@ export class DepotComponent {
           }
         } else if (Array.isArray(data)) {
           this.projetDepots = data.sort((a, b) => (b.id || 0) - (a.id || 0));
-          console.log(`✅ ${data.length} ProjetDepots chargés pour le projet ${targetProjetId}`);
+          // console.log(`✅ ${data.length} ProjetDepots chargés pour le projet ${targetProjetId}`);
           // Charger les détails des dépôts
           this.loadDepotsDetails();
         } else {
@@ -897,7 +897,7 @@ export class DepotComponent {
           })
           .sort((a, b) => (b.id || 0) - (a.id || 0));
         
-        console.log('✅ Dépôts enrichis avec quantités:', this.depots);
+        // console.log('✅ Dépôts enrichis avec quantités:', this.depots);
         this.applyFilter();
       },
       error: (err: any) => {
@@ -1126,6 +1126,28 @@ export class DepotComponent {
         doc.text(`Produit: ${this.projetActif.nomProduit}`, 14, yPos);
         yPos += 6;
       }
+      // Afficher les sociétés si disponibles (projet.societeNoms peut être Set ou array)
+      const societesSet = (this.projetActif && (this.projetActif as any).societeNoms) ? (this.projetActif as any).societeNoms : null;
+      let societesStr = '';
+      if (societesSet) {
+        try {
+          societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', ');
+        } catch {
+          societesStr = String(societesSet);
+        }
+      }
+      if (societesStr) {
+        doc.text(`Sociétés: ${societesStr}`, 14, yPos);
+        // plus grand espacement après sociétés pour meilleure lisibilité
+        yPos += 10;
+      }
+      // Afficher la date de début du projet si disponible
+      if ((this.projetActif as any).dateDebut) {
+        try {
+          doc.text(`Date début projet: ${this.formatDate((this.projetActif as any).dateDebut)}`, 14, yPos);
+          yPos += 6;
+        } catch {}
+      }
     }
 
     // Statistiques
@@ -1136,7 +1158,7 @@ export class DepotComponent {
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    let statsY = this.projetActif ? 45 : 25;
+    let statsY = this.projetActif ? 60 : 40;
     doc.text(`Total Dépôts: ${totalDepots}`, 14, statsY);
     doc.text(`Quantité Totale Vendue: ${totalVendu.toFixed(2)} kg`, 80, statsY);
 
@@ -1225,8 +1247,67 @@ export class DepotComponent {
       };
     });
 
-    // Créer la feuille de calcul
-    const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(data);
+    // Créer la feuille de calcul avec en-tête projet (titre + meta)
+    const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+    ws['!merges'] = ws['!merges'] || [];
+    let currentRow = 0;
+
+    // Titre principal
+    XLSX.utils.sheet_add_aoa(ws, [[`LISTE DES DÉPÔTS`]], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+    currentRow++;
+
+    // Informations du projet (navire / port / produit / projet)
+    const projet = this.contextProjet || this.projetActif;
+    if (projet) {
+      if (projet.nomNavire) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Navire: ${projet.nomNavire}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+        currentRow++;
+      }
+      if (projet.port) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Port: ${projet.port}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+        currentRow++;
+      }
+      if (projet.nomProduit) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${projet.nomProduit}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+        currentRow++;
+      }
+      if (projet.nom) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Projet: ${projet.nom}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+        currentRow++;
+      }
+      // Sociétés du projet si disponibles
+      const societesSet = projet && (projet as any).societeNoms ? (projet as any).societeNoms : null;
+      let societesStr = '';
+      if (societesSet) {
+        try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); }
+      }
+      if (societesStr) {
+        XLSX.utils.sheet_add_aoa(ws, [[`Sociétés: ${societesStr}`]], { origin: { r: currentRow, c: 0 } });
+        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+        currentRow++;
+        // ajouter une ligne vide pour créer une marge visuelle
+        currentRow++;
+      }
+      // Date début du projet si disponible
+      if ((projet as any).dateDebut) {
+        try {
+          XLSX.utils.sheet_add_aoa(ws, [[`Date début projet: ${this.formatDate((projet as any).dateDebut)}`]], { origin: { r: currentRow, c: 0 } });
+          ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+          currentRow++;
+        } catch {}
+      }
+    }
+
+    // Ligne vide
+    currentRow++;
+
+    // Ajouter les données à partir de currentRow
+    XLSX.utils.sheet_add_json(ws, data, { origin: { r: currentRow, c: 0 } });
 
     // Définir la largeur des colonnes
     ws['!cols'] = [
@@ -1257,6 +1338,19 @@ export class DepotComponent {
         { 'Statistique': 'Port', 'Valeur': this.projetActif.port || '-' },
         { 'Statistique': 'Produit', 'Valeur': this.projetActif.nomProduit || '-' }
       );
+      // Ajouter les sociétés si disponibles
+      const societesSet = (this.projetActif && (this.projetActif as any).societeNoms) ? (this.projetActif as any).societeNoms : null;
+      let societesStr = '';
+      if (societesSet) {
+        try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); }
+      }
+      if (societesStr) {
+        statsData.splice(3, 0, { 'Statistique': 'Sociétés', 'Valeur': societesStr });
+      }
+      // Ajouter la date de début du projet si disponible
+      if ((this.projetActif as any).dateDebut) {
+        statsData.splice(3, 0, { 'Statistique': 'Date début projet', 'Valeur': this.formatDate((this.projetActif as any).dateDebut) });
+      }
     }
 
     const wsStats: XLSX.WorkSheet = XLSX.utils.json_to_sheet(statsData);

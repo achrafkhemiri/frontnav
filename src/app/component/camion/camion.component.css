@@ -10,3 +10,5 @@
   font-size: 14px;
   font-weight: 500;
 }
+
+/* Use global button styles from styles-table.css (.add-btn, .action-btn, .edit-btn, .delete-btn) */

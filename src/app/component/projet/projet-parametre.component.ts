@@ -64,7 +64,7 @@ export class ProjetParametreComponent implements OnInit {
         } else {
           this.projet = data;
         }
-        console.log('Projet chargé:', this.projet);
+        // console.log('Projet chargé:', this.projet);
       },
       error: (err) => {
         console.error('Erreur chargement projet:', err);

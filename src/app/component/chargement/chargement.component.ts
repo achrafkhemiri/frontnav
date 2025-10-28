@@ -909,7 +909,32 @@ export class ChargementComponent {
         },
         error: (err) => {
           console.error('❌ Erreur création déchargement:', err);
-          this.error = 'Erreur lors de la création du déchargement';
+          // Try to extract a useful backend message for display in the form
+          let backendMessage = '';
+          try {
+            if (err && err.error) {
+              if (typeof err.error === 'string') {
+                backendMessage = err.error;
+              } else if (err.error.message) {
+                backendMessage = err.error.message;
+              } else if (err.error.msg) {
+                backendMessage = err.error.msg;
+              } else {
+                backendMessage = JSON.stringify(err.error);
+              }
+            } else if (err && err.message) {
+              backendMessage = err.message;
+            }
+          } catch (e) {
+            // ignore parsing errors
+          }
+
+          if (backendMessage) {
+            // Improve the message shown to the user
+            this.error = 'num ticket ou num BL déja utilisé' ;
+          } else {
+            this.error = 'num ticket ou num BL déja utilisé';
+          }
         }
       });
     }

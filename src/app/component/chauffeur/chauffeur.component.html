@@ -16,6 +16,12 @@
           <p class="page-subtitle">{{ filteredChauffeurs.length }} chauffeur(s) trouvé(s)</p>
         </div>
       </div>
+      <div style="display: flex; gap: 12px;">
+        <button class="add-btn" (click)="openAddDialog()" title="Ajouter un nouveau chauffeur">
+          <i class="bi bi-plus-lg"></i>
+          <span>Ajouter un chauffeur</span>
+        </button>
+      </div>
     </div>
 
     <div *ngIf="error" class="error">{{ error }}</div>
@@ -79,6 +85,11 @@
                 }"></i>
               </div>
             </th>
+            <th class="text-center">
+              <div class="th-content text-center">
+                <span>Actions</span>
+              </div>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -86,9 +97,17 @@
             <td class="id-cell">{{ ch.id }}</td>
             <td>{{ ch.nom }}</td>
             <td>{{ ch.numCin }}</td>
+            <td class="actions-cell">
+              <button class="action-btn edit-btn" (click)="editChauffeur(ch)" title="Modifier">
+                <i class="bi bi-pencil-fill"></i>
+              </button>
+              <button class="action-btn delete-btn" (click)="requestDeleteChauffeur(ch.id)" title="Supprimer">
+                <i class="bi bi-trash-fill"></i>
+              </button>
+            </td>
           </tr>
           <tr *ngIf="paginatedChauffeurs.length === 0" class="no-data-row">
-            <td colspan="3">
+            <td colspan="4">
               <div class="no-data">
                 <i class="bi bi-inbox"></i>
                 <p>Aucun chauffeur trouvé</p>
@@ -137,6 +156,45 @@
         <div class="dialog-actions">
           <button (click)="editMode ? updateChauffeur() : saveChauffeur()">{{ editMode ? 'Enregistrer' : 'Ajouter' }}</button>
           <button (click)="cancel()">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de confirmation de suppression (comme Depot) -->
+    <div class="dialog-backdrop" *ngIf="showConfirmModal" (click)="cancelDelete()">
+      <div class="confirm-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header-confirm">
+          <i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+          <h3>{{ modalTitle }}</h3>
+        </div>
+        <div class="modal-body-confirm">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-actions-confirm">
+          <button class="btn-cancel" (click)="cancelDelete()">
+            <i class="bi bi-x-lg"></i>
+            Annuler
+          </button>
+          <button class="btn-confirm-delete" (click)="confirmDelete()">
+            <i class="bi bi-trash-fill"></i>
+            Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal d'erreur -->
+    <div class="dialog-backdrop" *ngIf="showErrorModal" (click)="showErrorModal = false">
+      <div class="confirm-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header-confirm">
+          <i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+          <h3>{{ modalTitle }}</h3>
+        </div>
+        <div class="modal-body-confirm">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-actions-confirm">
+          <button class="btn-cancel" (click)="showErrorModal = false">Fermer</button>
         </div>
       </div>
     </div>

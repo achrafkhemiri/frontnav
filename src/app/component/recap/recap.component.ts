@@ -321,7 +321,7 @@ export class RecapComponent {
       console.log('Quantité pour ce projet:', clientData.quantitesAutoriseesParProjet[projetId]);
     }
     if (clientData.quantiteAutorisee !== undefined) {
-      console.log('Quantité autorisée globale:', clientData.quantiteAutorisee);
+      console.log('Quantité totale autorisée globale:', clientData.quantiteAutorisee);
     }
     
     this.loadVoyagesForClient();
@@ -570,12 +570,12 @@ export class RecapComponent {
       if (client.quantitesAutoriseesParProjet && projetId) {
         const quantite = client.quantitesAutoriseesParProjet[projetId];
         if (quantite !== undefined) {
-          console.log(`Quantité autorisée pour client ${clientId} depuis selectedClient:`, quantite);
+          console.log(`Quantité totale autorisée pour client ${clientId} depuis selectedClient:`, quantite);
           return quantite;
         }
       }
       if (client.quantiteAutorisee !== undefined) {
-        console.log(`Quantité autorisée pour client ${clientId} depuis selectedClient.quantiteAutorisee:`, client.quantiteAutorisee);
+        console.log(`Quantité totale autorisée pour client ${clientId} depuis selectedClient.quantiteAutorisee:`, client.quantiteAutorisee);
         return client.quantiteAutorisee;
       }
     }
@@ -661,40 +661,56 @@ export class RecapComponent {
   }
 
   // Calculer le reste cumulé après chaque voyage (pour affichage dans le tableau)
+  // NOTE: compute against the full voyages list, based on dates, so UI filters (date) don't change the remainder
   getResteCumule(voyage: any, index: number): number {
     if (!this.selectedClient || !this.selectedClient.id) return 0;
-    
-    const quantiteAutorisee = this.getQuantiteAutorisee(this.selectedClient.id);
-    
-    // Calculer le total livré jusqu'à ce voyage (inclus)
+
+    const clientId = this.selectedClient.id;
+    const quantiteAutorisee = this.getQuantiteAutorisee(clientId);
+
+    // Use the full voyages loaded for this client (this.voyages) so filters don't affect remainder
+    const all = Array.isArray(this.voyages) ? this.voyages : [];
+
+    // Determine the target date for the voyage; if missing, treat as far future (include all)
+    const targetDate = voyage && voyage.date ? new Date(voyage.date) : null;
+
     let totalLivreJusquIci = 0;
-    for (let i = 0; i <= index; i++) {
-      const v = this.paginatedVoyages[i];
-      totalLivreJusquIci += (v.poidsClient || 0);
+    for (const v of all) {
+      if (!v) continue;
+      if (v.clientId !== clientId) continue;
+      if (targetDate && v.date) {
+        const d = new Date(v.date);
+        if (d <= targetDate) totalLivreJusquIci += (v.poidsClient || 0);
+      } else if (!targetDate) {
+        // if voyage has no date, include everything
+        totalLivreJusquIci += (v.poidsClient || 0);
+      }
     }
-    
-    // Reste = Quantité autorisée - Total livré jusqu'ici
+
     return quantiteAutorisee - totalLivreJusquIci;
   }
 
   // Calculer le reste cumulé pour un voyage donné en fonction du code d'autorisation
+  // NOTE: compute against the full voyages list, based on dates, so UI filters (date) don't change the remainder
   getResteCumuleForVoyageByCode(voyage: any, index: number): number {
     if (!this.selectedClient || !this.selectedClient.id) return 0;
     const clientId = this.selectedClient.id;
-    // Determine the code on this voyage (support multiple shapes)
     const code = (voyage as any).autorisationCode || (voyage as any).autorisation?.code || undefined;
-    if (!code) {
-      // fallback to overall reste
-      return this.getResteCumule(voyage, index);
-    }
+    if (!code) return this.getResteCumule(voyage, index);
 
-    // Sum delivered for this code up to the given index in the currently paginated list
+    const all = Array.isArray(this.voyages) ? this.voyages : [];
+    const targetDate = voyage && voyage.date ? new Date(voyage.date) : null;
+
     let totalForCode = 0;
-    for (let i = 0; i <= index; i++) {
-      const v = this.paginatedVoyages[i];
+    for (const v of all) {
       if (!v) continue;
+      if (v.clientId !== clientId) continue;
       const vCode = (v as any).autorisationCode || (v as any).autorisation?.code || undefined;
-      if (v.clientId === clientId && vCode === code) {
+      if (vCode !== code) continue;
+      if (targetDate && v.date) {
+        const d = new Date(v.date);
+        if (d <= targetDate) totalForCode += (v.poidsClient || 0);
+      } else if (!targetDate) {
         totalForCode += (v.poidsClient || 0);
       }
     }
@@ -765,7 +781,7 @@ export class RecapComponent {
     doc.setFont('helvetica', 'normal');
     doc.text(`Client: ${this.selectedClient.nom}`, 14, 25);
     doc.text(`Numéro: ${this.selectedClient.numero || 'N/A'}`, 14, 31);
-    doc.text(`Quantité autorisée: ${this.getQuantiteAutorisee(this.selectedClient.id).toFixed(2)} kg`, 14, 37);
+    doc.text(`Quantité Total autorisée: ${this.getQuantiteAutorisee(this.selectedClient.id).toFixed(2)} kg`, 14, 37);
     
     // Statistiques
     doc.setFont('helvetica', 'bold');
@@ -795,47 +811,102 @@ export class RecapComponent {
       }
     }
     
-    // Tableau des voyages
-    const tableData = this.filteredVoyages.map(v => [
-      v.date ? v.date.substring(0, 10) : '',
-      v.numBonLivraison || '',
-      v.numTicket || '',
-      this.getCamionMatricule(v.camionId),
-      this.getChauffeurNom(v.chauffeurId),
-      (v.poidsClient || 0).toFixed(2),
-      (v.reste || 0).toFixed(2)
-    ]);
-    
-    autoTable(doc, {
-      startY: this.voyageFilter || this.dateDebut || this.dateFin ? 77 : 59,
-      head: [['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [102, 126, 234],
-        textColor: 255,
-        fontSize: 10,
-        fontStyle: 'bold',
-        halign: 'center'
-      },
-      bodyStyles: {
-        fontSize: 9,
-        cellPadding: 3
-      },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 30 },
-        1: { halign: 'left', cellWidth: 35 },
-        2: { halign: 'left', cellWidth: 30 },
-        3: { halign: 'center', cellWidth: 35 },
-        4: { halign: 'left', cellWidth: 50 },
-        5: { halign: 'right', cellWidth: 30 },
-        6: { halign: 'right', cellWidth: 30 }
-      },
-      alternateRowStyles: {
-        fillColor: [245, 247, 250]
-      },
-      margin: { left: 14, right: 14 }
-    });
+    // Group voyages by authorization ticket (codes) and render one section per ticket
+    const autorisations = this.getClientAutorisations(this.selectedClient.id) || [];
+    const startYBase = this.voyageFilter || this.dateDebut || this.dateFin ? 77 : 59;
+    let currentY = startYBase;
+
+    if (!Array.isArray(autorisations) || autorisations.length === 0) {
+      // Fallback: render a single table with all voyages (existing behavior)
+      const tableData = this.filteredVoyages.map(v => [
+        v.date ? v.date.substring(0, 10) : '',
+        v.numBonLivraison || '',
+        v.numTicket || '',
+        this.getCamionMatricule(v.camionId),
+        this.getChauffeurNom(v.chauffeurId),
+        (v.poidsClient || 0).toFixed(2),
+        this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+      ]);
+
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [102, 126, 234], textColor: 255, fontSize: 10, fontStyle: 'bold', halign: 'center' },
+        bodyStyles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 30 },
+          1: { halign: 'left', cellWidth: 35 },
+          2: { halign: 'left', cellWidth: 30 },
+          3: { halign: 'center', cellWidth: 35 },
+          4: { halign: 'left', cellWidth: 50 },
+          5: { halign: 'right', cellWidth: 30 },
+          6: { halign: 'right', cellWidth: 30 }
+        },
+        alternateRowStyles: { fillColor: [245, 247, 250] },
+        margin: { left: 14, right: 14 }
+      });
+    } else {
+      for (const auth of autorisations) {
+        const code = auth?.code || 'N/A';
+        const quantiteAuth = Number(auth?.quantite || 0);
+
+        // Section header for this ticket
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`code ticket d\'autorisation: ${code} — Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`, 14, currentY);
+        currentY += 6;
+
+        // Table rows: use filteredVoyages but only voyages matching this code
+        const rows = this.filteredVoyages.filter(v => {
+          const vCode = (v as any).autorisationCode || (v as any).autorisation?.code || '';
+          return vCode === code;
+        }).map(v => [
+          v.date ? v.date.substring(0, 10) : '',
+          v.numBonLivraison || '',
+          v.numTicket || '',
+          this.getCamionMatricule(v.camionId),
+          this.getChauffeurNom(v.chauffeurId),
+          (v.poidsClient || 0).toFixed(2),
+          this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+        ]);
+
+        if (rows.length === 0) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(10);
+          doc.text('Aucun voyage pour cette autorisation dans la sélection.', 14, currentY);
+          currentY += 8;
+        } else {
+          autoTable(doc, {
+            startY: currentY,
+            head: [['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']],
+            body: rows,
+            theme: 'grid',
+            headStyles: { fillColor: [102, 126, 234], textColor: 255, fontSize: 10, fontStyle: 'bold', halign: 'center' },
+            bodyStyles: { fontSize: 9, cellPadding: 3 },
+            columnStyles: {
+              0: { halign: 'center', cellWidth: 30 },
+              1: { halign: 'left', cellWidth: 35 },
+              2: { halign: 'left', cellWidth: 30 },
+              3: { halign: 'center', cellWidth: 35 },
+              4: { halign: 'left', cellWidth: 50 },
+              5: { halign: 'right', cellWidth: 30 },
+              6: { halign: 'right', cellWidth: 30 }
+            },
+            alternateRowStyles: { fillColor: [245, 247, 250] },
+            margin: { left: 14, right: 14 },
+            didDrawPage: (dataArg) => {
+              // update currentY to next position after table
+              currentY = (dataArg.cursor && dataArg.cursor.y) ? dataArg.cursor.y + 6 : currentY + 50;
+            }
+          });
+        }
+
+        // small spacer between sections
+        currentY += 4;
+      }
+    }
     
     // Footer avec date de génération
     const pageCount = (doc as any).internal.getNumberOfPages();
@@ -871,7 +942,7 @@ export class RecapComponent {
       [],
       ['Client', this.selectedClient.nom],
       ['Numéro', this.selectedClient.numero || 'N/A'],
-      ['Quantité autorisée', this.getQuantiteAutorisee(this.selectedClient.id).toFixed(2) + ' kg'],
+      ['Quantité Total autorisée', this.getQuantiteAutorisee(this.selectedClient.id).toFixed(2) + ' kg'],
       [],
       ['STATISTIQUES'],
       ['Total voyages', this.filteredVoyages.length],
@@ -889,19 +960,58 @@ export class RecapComponent {
     }
     
     statsData.push(['DÉTAILS DES VOYAGES']);
-    statsData.push(['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']);
-    
-    this.filteredVoyages.forEach(v => {
-      statsData.push([
-        v.date ? v.date.substring(0, 10) : '',
-        v.numBonLivraison || '',
-        v.numTicket || '',
-        this.getCamionMatricule(v.camionId),
-        this.getChauffeurNom(v.chauffeurId),
-        (v.poidsClient || 0).toFixed(2),
-        (v.reste || 0).toFixed(2)
-      ]);
-    });
+
+    // Group voyages per authorization ticket
+    const autorisations = this.getClientAutorisations(this.selectedClient.id) || [];
+
+    if (!Array.isArray(autorisations) || autorisations.length === 0) {
+      // fallback: single table with all voyages
+      statsData.push(['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']);
+      this.filteredVoyages.forEach(v => {
+        statsData.push([
+          v.date ? v.date.substring(0, 10) : '',
+          v.numBonLivraison || '',
+          v.numTicket || '',
+          this.getCamionMatricule(v.camionId),
+          this.getChauffeurNom(v.chauffeurId),
+          (v.poidsClient || 0).toFixed(2),
+          this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+        ]);
+      });
+    } else {
+      for (const auth of autorisations) {
+        const code = auth?.code || 'N/A';
+        const quantiteAuth = Number(auth?.quantite || 0);
+
+        // Section header for this ticket
+        statsData.push([`code ticket d\'autorisation: ${code}`, `Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`]);
+        statsData.push(['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']);
+
+        const rows = this.filteredVoyages.filter(v => {
+          const vCode = (v as any).autorisationCode || (v as any).autorisation?.code || '';
+          return vCode === code;
+        });
+
+        if (rows.length === 0) {
+          statsData.push(['', 'Aucun voyage pour cette autorisation dans la sélection.']);
+        } else {
+          rows.forEach(v => {
+            statsData.push([
+              v.date ? v.date.substring(0, 10) : '',
+              v.numBonLivraison || '',
+              v.numTicket || '',
+              this.getCamionMatricule(v.camionId),
+              this.getChauffeurNom(v.chauffeurId),
+              (v.poidsClient || 0).toFixed(2),
+              this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+            ]);
+          });
+        }
+
+        // blank line between sections
+        statsData.push([]);
+      }
+    }
     
     const ws = XLSX.utils.aoa_to_sheet(statsData);
     

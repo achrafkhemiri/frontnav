@@ -20,42 +20,44 @@ export class AuthErrorInterceptor implements HttpInterceptor {
         if (error instanceof HttpErrorResponse) {
           // Gérer les erreurs 401 - Token invalide ou expiré
           if (error.status === 401) {
+            // 401 reste en général une erreur d'authentification -> logout
+            // Mais si le backend renvoie un message métier clair (rare pour 401), on pourrait l'afficher côté UI.
             console.warn('🔒 Token expiré ou invalide (401). Déconnexion automatique...');
             this.handleTokenExpiration();
           }
           
           // Gérer les erreurs 403 liées au token expiré
           if (error.status === 403) {
-            const errorMessage = (error.error?.message || error.message || '').toString().toLowerCase();
+            const errorMessageRaw = (error.error?.message || error.error || error.message || '').toString();
+            const errorMessage = errorMessageRaw.toLowerCase();
             // Use the outgoing request URL as primary source (more reliable in interceptors)
             const requestUrl = (req && (req.urlWithParams || req.url)) || error.url || '';
 
-            // Business endpoints that must NOT trigger a logout on 403
+            // Heuristiques: certains messages sont des erreurs métier (duplicate, exists, déjà, ticket/bon existant)
+            const businessKeywords = [
+              'existe', 'déjà', 'already exists', 'already', 'exists', 'duplicate', 'dupli',
+              'numticket', 'num ticket', 'numéro de ticket', 'ticket',
+              'numbon', 'num bon', 'bonlivraison', 'bon de livraison', 'bon', 'bonlivraison', 'bon de liv' 
+            ];
+
+            const msgLooksLikeBusiness = businessKeywords.some(k => errorMessage.includes(k));
+
+            // Endpoint specific whitelist (POST create dechargement often returns business 403)
+            const isDechargementCreate = requestUrl.includes('/api/dechargement') && req.method === 'POST';
             const isNotificationsPost = requestUrl.includes('/api/notifications') && req.method === 'POST';
             const isProjetDepotCreate = requestUrl.includes('/api/projet-depot') && req.method === 'POST';
             const isQuantiteAutorisee = (requestUrl.includes('/api/projet-client/') && requestUrl.includes('/quantite-autorisee')) ||
                                        (requestUrl.includes('/api/projet-depot/') && requestUrl.includes('/quantite-autorisee'));
 
-            if (isNotificationsPost) {
-              console.warn('⚠️ Échec création notification (403) - ignoré pour éviter déconnexion intempestive');
+            // If the response looks like a business error (by endpoint or message), do NOT logout; let the component handle it
+            if (isDechargementCreate || isNotificationsPost || isProjetDepotCreate || isQuantiteAutorisee || msgLooksLikeBusiness) {
+              console.warn('⚠️ 403 métier détecté (no-logout). Request:', req.method, requestUrl, 'Message:', errorMessageRaw);
               return throwError(() => error);
             }
 
-            if (isProjetDepotCreate) {
-              console.warn('⚠️ Échec création ProjetDepot (403) - erreur métier, affichage modal attendu');
-              return throwError(() => error);
-            }
-
-            if (isQuantiteAutorisee) {
-              console.warn('⚠️ Dépassement de quantité autorisée (403) - erreur métier, pas d\'authentification');
-              return throwError(() => error);
-            }
-
-            // If none of the above matched, only then consider it an authentication problem
+            // Otherwise treat as authentication/authorization problem
             if (this.authService.isAuthenticated()) {
               console.warn('🔒 Erreur 403 reçue alors que l\'utilisateur est authentifié. Token probablement expiré. Déconnexion automatique...');
-              console.log('URL de la requête:', requestUrl);
-              console.log('Message d\'erreur:', errorMessage || '(vide)');
               this.handleTokenExpiration();
             } else {
               // Additional heuristic checks on the error message
@@ -74,12 +76,12 @@ export class AuthErrorInterceptor implements HttpInterceptor {
   private handleTokenExpiration(): void {
     // Éviter les appels multiples simultanés
     if (this.isHandlingExpiration) {
-      console.log('⏭️ Déconnexion déjà en cours, ignoré...');
+      // console.log('⏭️ Déconnexion déjà en cours, ignoré...');
       return;
     }
     
     this.isHandlingExpiration = true;
-    console.log('🚪 Déconnexion de l\'utilisateur...');
+    // console.log('🚪 Déconnexion de l\'utilisateur...');
     
     // Marquer comme déconnecté immédiatement
     this.authService.markLoggedOut();
@@ -102,14 +104,14 @@ export class AuthErrorInterceptor implements HttpInterceptor {
     setTimeout(() => {
       this.isHandlingExpiration = false;
       if (!this.router.url.includes('/login')) {
-        console.log('↪️ Redirection vers /login avec message d\'expiration');
+        // console.log('↪️ Redirection vers /login avec message d\'expiration');
         this.router.navigate(['/login'], { 
           queryParams: { 
             expired: 'true'
           } 
         });
       } else {
-        console.log('↪️ Déjà sur la page de login');
+        // console.log('↪️ Déjà sur la page de login');
       }
     }, 100);
   }

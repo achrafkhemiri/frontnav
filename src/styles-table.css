@@ -367,20 +367,34 @@
   cursor: not-allowed;
 }
 
-/* Dialog Modal */
-.dialog-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  animation: fadeIn 0.3s ease;
+/* Dialog / Modal / Alert Backdrop — ensure it covers the entire viewport
+   If you want to remove the dark overlay entirely, uncomment the
+   `.backdrop-disable` helper at the end of this block and add the
+   `backdrop-disable` class to the root of the dialog in the template. */
+.dialog-backdrop,
+.modal-backdrop,
+.alert-modal-backdrop {
+  /* Force fixed viewport coverage and highest stacking to avoid clipping */
+  position: fixed !important;
+  inset: 0 !important; /* top:0; right:0; bottom:0; left:0 */
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100vw !important;
+  min-height: 100vh !important;
+  background: rgba(15, 23, 42, 0.6) !important;
+  backdrop-filter: blur(4px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  /* Keep the backdrop below modal/dialog layers (common modal z-index ~1050)
+    so inputs inside the dialog stay interactive. If you need the dialog to
+    appear above other UI (sidebar/header), increase the dialog z-index
+    instead of the backdrop. */
+  z-index: 1040 !important;
+  animation: fadeIn 0.28s ease !important;
+  pointer-events: auto !important;
+  /* Avoid being trapped inside transformed ancestors */
+  transform: none !important;
 }
 
 @keyframes fadeIn {
@@ -396,6 +410,113 @@
   min-width: 400px;
   max-width: 95vw;
   animation: slideUp 0.3s ease;
+}
+
+/* ===== MODALES DE CONFIRMATION ET ERREUR (global partagé) ===== */
+.confirm-modal, .error-modal {
+  background: white;
+  border-radius: 20px;
+  padding: 0;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: modalSlideIn 0.3s ease-out;
+  overflow: hidden;
+}
+
+.modal-header-confirm, .modal-header-error {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: white;
+}
+
+.modal-header-confirm i, .modal-header-error i {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.modal-header-confirm h3, .modal-header-error h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.modal-body-confirm, .modal-body-error {
+  padding: 28px 24px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.modal-body-confirm p, .modal-body-error p {
+  margin: 0;
+  font-size: 15px;
+  color: #475569;
+}
+
+.modal-actions-confirm, .modal-actions-error {
+  padding: 20px 24px;
+  background: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-cancel {
+  background: white;
+  color: #64748b;
+  border: 2px solid #cbd5e1;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+}
+
+.btn-confirm-delete {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  transition: all 0.3s ease;
+}
+
+.btn-confirm-delete:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes slideUp {

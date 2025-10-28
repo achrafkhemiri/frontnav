@@ -637,7 +637,36 @@ export class DechargementComponent implements OnInit {
   getResteClientForCode(clientId: number, code: string, excludeDechargementId?: number): number {
     const quantiteAutorisee = this.getQuantiteAutoriseeForCode(clientId, code);
     const totalLivre = this.getTotalLivreClientForCode(clientId, code, excludeDechargementId);
-    return quantiteAutorisee - totalLivre;
+  // Calculer le reste INCLUANT le déchargement courant (afin d'afficher le reste après cette vente)
+  return quantiteAutorisee - totalLivre;
+  }
+
+  // Calculer le reste pour un client+code AU MOMENT d'un déchargement donné (somme cumulative jusqu'à la date du déchargement)
+  // Si inclusive=true, inclut le déchargement courant dans le total (reste après); sinon n'inclut pas (reste avant)
+  getResteClientForCodeUpToDechargement(dech?: DechargementDTO, inclusive: boolean = true): number {
+    if (!dech) return 0;
+    const clientId = dech.clientId;
+    const code = (dech as any).autorisationCode || '';
+    if (!clientId || !code) return 0;
+
+    const dechDate = dech.dateDechargement ? new Date(dech.dateDechargement).getTime() : Date.now();
+
+    const totalLivreJusquA = this.dechargements
+      .filter(d => d.clientId === clientId && d.projetId === this.projetActif?.id)
+      .filter(d => {
+        const codeOnD = (d as any).autorisationCode || '';
+        if (codeOnD !== code) return false;
+        const dDate = d.dateDechargement ? new Date(d.dateDechargement).getTime() : 0;
+        if (inclusive) return dDate <= dechDate;
+        // exclusive: strictly before the current déchargement OR exclude same id
+        if (dDate < dechDate) return true;
+        if (d.id === dech.id) return false;
+        return false;
+      })
+      .reduce((s, d) => s + ((d.poidComplet || 0) - (d.poidCamionVide || 0)), 0);
+
+    const quantiteAutorisee = this.getQuantiteAutoriseeForCode(clientId, code);
+    return quantiteAutorisee - totalLivreJusquA;
   }
 
   loadClients(): void {
@@ -857,6 +886,9 @@ export class DechargementComponent implements OnInit {
       'Transporteur': dech.societe || '-',
       'Client': this.getClientName(dech.clientId),
       'Dépôt': this.getDepotName(dech.depotId),
+      'autorisation': (dech as any).autorisationCode || '-',
+      // Fournir à la fois le reste AVANT et APRÈS la vente pour lever toute ambiguïté
+  'Reste autorisation ': ((dech.clientId && (dech as any).autorisationCode) ? this.getResteClientForCodeUpToDechargement(dech, true) : 0),
       'Poids Tar': dech.poidCamionVide?.toFixed(0),
       'Poids Brut': dech.poidComplet?.toFixed(0),
       'Poids Net': this.calculatePoidsNet(dech).toFixed(0)
@@ -949,8 +981,14 @@ export class DechargementComponent implements OnInit {
     const tableData = this.filteredDechargements.map(dech => {
       const client = this.clients.find(c => c.id === dech.clientId);
       const depot = this.depots.find(d => d.id === dech.depotId);
-      
-      return [
+  // calcul autorisation & reste (avant / après) basé sur la date (cumulatif)
+  const autorisationCode = (dech as any).autorisationCode || '';
+  // Reste AVANT la vente : exclude current déchargement (strictement before)
+  const resteAvant = (dech.clientId && autorisationCode) ? Math.round(this.getResteClientForCodeUpToDechargement(dech, false)) : 0;
+  // Reste APRÈS la vente : inclut le déchargement courant (up to inclusive)
+  // const resteApres = (dech.clientId && autorisationCode) ? Math.round(this.getResteClientForCodeUpToDechargement(dech, true)) : 0;
+
+    return [
         dech.dateDechargement ? this.formatDateTime(dech.dateDechargement) : '',
         dech.numTicket || '',
         dech.numBonLivraison || '',
@@ -960,7 +998,10 @@ export class DechargementComponent implements OnInit {
         depot?.nom || '',
         Math.round(dech.poidCamionVide || 0).toString(),
         Math.round(dech.poidComplet || 0).toString(),
-        Math.round(this.calculatePoidsNet(dech)).toString()
+        Math.round(this.calculatePoidsNet(dech)).toString(),
+        autorisationCode || '',
+        resteAvant.toString(),
+        // resteApres.toString()
       ];
     });
 
@@ -977,13 +1018,16 @@ export class DechargementComponent implements OnInit {
         'Dépôt',
         'Poids Tar',
         'Poids Brut',
-        'Poids Net'
+        'Poids Net',
+        'Autorisation',
+        'Reste autorisation'
       ]],
       body: tableData,
       theme: 'grid',
       styles: {
-        fontSize: 8,
-        cellPadding: 2,
+        fontSize: 7,
+        cellPadding: 1,
+        // autorisation codes and société names may be long — allow line breaks
         overflow: 'linebreak',
         halign: 'left'
       },
@@ -991,19 +1035,23 @@ export class DechargementComponent implements OnInit {
         fillColor: [102, 126, 234],
         textColor: 255,
         fontStyle: 'bold',
-        halign: 'center'
+        halign: 'center',
+        fontSize: 7
       },
       columnStyles: {
-        0: { cellWidth: 30 },  // Date
-        1: { cellWidth: 20 },  // N° Ticket
-        2: { cellWidth: 25 },  // Bon Livraison
-        3: { cellWidth: 30 },  // Société
-        4: { cellWidth: 30 },  // Transporteur
+        0: { cellWidth: 22 },  // Date
+        1: { cellWidth: 14 },  // N° Ticket
+        2: { cellWidth: 18 },  // Bon Livraison
+        3: { cellWidth: 40 },  // Société
+        4: { cellWidth: 24 },  // Transporteur
         5: { cellWidth: 30, fillColor: [209, 250, 229] },  // Client (vert)
-        6: { cellWidth: 30, fillColor: [254, 243, 199] },  // Dépôt (jaune)
-        7: { cellWidth: 20, halign: 'right' },  // Poids Tar
-        8: { cellWidth: 20, halign: 'right' },  // Poids Brut
-        9: { cellWidth: 20, halign: 'right', fontStyle: 'bold' }   // Poids Net
+        6: { cellWidth: 24, fillColor: [254, 243, 199] },  // Dépôt (jaune)
+        7: { cellWidth: 12, halign: 'right' },  // Poids Tar
+        8: { cellWidth: 12, halign: 'right' },  // Poids Brut
+        9: { cellWidth: 12, halign: 'right', fontStyle: 'bold' },  // Poids Net
+        10: { cellWidth: 28, halign: 'left' }, // Autorisation
+        11: { cellWidth: 18, halign: 'right' }, // Reste Avant
+        12: { cellWidth: 18, halign: 'right', fontStyle: 'bold' } // Reste Après
       },
       alternateRowStyles: {
         fillColor: [245, 247, 250]
@@ -1063,6 +1111,12 @@ export class DechargementComponent implements OnInit {
     }
 
     const poidsNet = this.calculatePoidsNet(dech);
+
+  // Calculer l'autorisation et le reste pour l'affichage
+  const autorisationCodePrint = (dech as any).autorisationCode || '';
+  // Calculer le reste AVANT et APRÈS la vente pour affichage
+  const resteAvantPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint, dech.id) : 0;
+  const resteApresPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint) : 0;
 
     // Créer une fenêtre d'impression avec le contenu HTML
     const printContent = `
@@ -1229,11 +1283,13 @@ export class DechargementComponent implements OnInit {
           <div class="main-title">BON DE SORTIE</div>
           <div class="bon-info">N° Bon: ${dech.numBonLivraison || 'N/A'}</div>
           <div class="bon-info">N° Ticket: ${dech.numTicket || 'N/A'}</div>
+          
         </div>
 
         <div class="product-info">
           <div><strong>Produit:</strong> ${dech.produit || 'N/A'} &nbsp;&nbsp;&nbsp; <strong>Navire:</strong> ${dech.navire || 'N/A'} &nbsp;&nbsp;&nbsp; <strong>Port:</strong> ${dech.port || 'N/A'}</div>
           <div><strong>Date:</strong> ${dateFormatted} &nbsp;&nbsp;&nbsp; <strong>Heure Départ:</strong> ${heureDepart}</div>
+          
         </div>
 
         <div class="vehicle-info">
@@ -1287,6 +1343,9 @@ export class DechargementComponent implements OnInit {
       // Ne pas lancer window.print() automatiquement : l'utilisateur peut vérifier et cliquer sur le bouton Imprimer
     }
   }
+  //decharge imprimer chroufa
+  //<div><strong>code ticket d'autorisation:</strong> ${autorisationCodePrint || 'N/A'} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Reste Ticket:</strong> ${resteApresPrint} kg</div>
+  //<div class="bon-info">code ticket d\'autorisation: ${(dech as any).autorisationCode || 'N/A'}</div>
 
   editDechargement(dech: DechargementDTO): void {
     this.editMode = true;

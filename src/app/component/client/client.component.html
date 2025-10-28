@@ -264,7 +264,7 @@
 										<div class="auth-list">
 											<div *ngFor="let a of $any(cl).autorisation" class="auth-item">
 												<div class="auth-code">{{ a.code || 'DEFAULT' }}</div>
-												<div class="auth-qty">{{ (a.quantite || 0) | number:'1.0-2' }} kg</div>
+												<div class="auth-qty">{{ (a.quantite || 0)  }} </div>
 											</div>
 										</div>
 									</ng-container>
@@ -279,14 +279,14 @@
 								<div class="vendue-list">
 									<div *ngFor="let a of $any(cl).autorisation" class="vendue-item">
 										<div class="vendue-code"><strong>{{ a.code || 'DEFAULT' }}</strong></div>
-										<div class="vendue-value">{{ getTotalLivreForClientCode(cl.id, a.code) | number:'1.0-2' }} kg</div>
+										<div class="vendue-value">{{ getTotalLivreForClientCode(cl.id, a.code) }} </div>
 									</div>
 								</div>
 							</ng-container>
 							<ng-template #totalVenduFallback>
 								<span class="vendue-badge">
 									<i class="bi bi-box-seam-fill"></i>
-									{{ getTotalLivreClient(cl.id) | number:'1.0-2' }} kg
+									{{ getTotalLivreClient(cl.id)  }} 
 								</span>
 							</ng-template>
 						</td>
@@ -295,13 +295,13 @@
 								<div class="reste-list">
 									<div *ngFor="let a of $any(cl).autorisation" class="reste-item">
 										<div class="reste-code">{{ a.code || 'DEFAULT' }}</div>
-										<div class="reste-value" [ngClass]="getResteForClientCode(cl, a.code) > 0 ? 'positive' : 'negative'">{{ getResteForClientCode(cl, a.code) | number:'1.0-2' }} kg</div>
+										<div class="reste-value" [ngClass]="getResteForClientCode(cl, a.code) > 0 ? 'positive' : 'negative'">{{ getResteForClientCode(cl, a.code) }} </div>
 									</div>
 								</div>
 							</ng-container>
 							<ng-template #totalResteFallback>
 								<span class="reste-badge" [style.background]="getResteColor(getResteClient(cl), getQuantitePourProjet(cl) || 0)" [style.color]="'white'">
-									{{ getResteClient(cl) | number:'1.0-2' }} kg
+									{{ getResteClient(cl)  }} 
 								</span>
 							</ng-template>
 						</td>
@@ -478,27 +478,27 @@
 								<!-- Mode autorisations (par défaut) -->
 								<div *ngIf="addAutorisationMode" class="autorisation-editor">
 									<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-										<button class="add-row-btn" (click)="addingAutorisation.push({ code: '', quantite: 0 })">
+										<button class="add-row-btn" (click)="addAddingAutorisationRow()">
 											<i class="bi bi-plus-lg"></i> Ajouter une autorisation
 										</button>
-										<div style="font-size:13px; color:#475569;">Total : <strong>{{ getAddingAutorisationTotal() }} kg</strong></div>
+										<div style="font-size:13px; color:#475569;">Total : <strong>{{ getAddingAutorisationTotal() }} </strong></div>
 									</div>
 
 									<table class="autorisation-table" style="width:100%; border-collapse:collapse; margin-bottom:12px;">
 										<thead>
 											<tr style="text-align:left; border-bottom:1px solid #e6edf3;">
 												<th style="padding:8px; width:50%;">Code</th>
-												<th style="padding:8px; width:35%;">Quantité (kg)</th>
+												<th style="padding:8px; width:35%;">Quantité </th>
 												<th style="padding:8px; width:15%;"></th>
 											</tr>
 										</thead>
 										<tbody>
 											<tr *ngFor="let a of (addingAutorisation || []); let i = index" style="border-bottom:1px dashed #f1f5f9;">
 												<td style="padding:8px;">
-													<input class="table-filter" [(ngModel)]="addingAutorisation[i].code" placeholder="Code (ex: DEFAULT)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
+													<input class="table-filter" [(ngModel)]="addingAutorisation[i].code" placeholder="Code (ex: 1)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
 												</td>
 												<td style="padding:8px;">
-													<input class="table-filter" type="text" min="0" step="0.01" [(ngModel)]="addingAutorisation[i].quantite" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
+													<input class="table-filter" type="text"  [(ngModel)]="addingAutorisation[i].quantite" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
 												</td>
 												<td style="padding:8px; text-align:center;">
 													<button class="delete-row-btn" (click)="addingAutorisation.splice(i,1)" title="Supprimer cette ligne">
@@ -560,21 +560,21 @@
 										<button class="add-row-btn" (click)="addAutorisationRow()">
 											<i class="bi bi-plus-lg"></i> Ajouter une autorisation
 										</button>
-										<div style="font-size:13px; color:#475569;">Total : <strong>{{ getTotalEditingAutorisation() }} kg</strong></div>
+										<div style="font-size:13px; color:#475569;">Total : <strong>{{ getTotalEditingAutorisation() }} </strong></div>
 									</div>
 
 									<table class="autorisation-table" style="width:100%; border-collapse:collapse; margin-bottom:12px;">
 										<thead>
 											<tr style="text-align:left; border-bottom:1px solid #e6edf3;">
 												<th style="padding:8px; width:50%;">Code</th>
-												<th style="padding:8px; width:35%;">Quantité (kg)</th>
+												<th style="padding:8px; width:35%;">Quantité </th>
 												<th style="padding:8px; width:15%;"></th>
 											</tr>
 										</thead>
 										<tbody>
 											<tr *ngFor="let a of editingAutorisation; let i = index" style="border-bottom:1px dashed #f1f5f9;">
 												<td style="padding:8px;">
-													<input class="table-filter" [(ngModel)]="editingAutorisation[i].code" placeholder="Code (ex: DEFAULT)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
+													<input class="table-filter" [(ngModel)]="editingAutorisation[i].code" placeholder="Code (ex: 1)" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />
 												</td>
 												<td style="padding:8px;">
 													<input class="table-filter" type="text" min="0" step="0.01" [(ngModel)]="editingAutorisation[i].quantite" style="width:100%; padding:8px; border-radius:6px; border:1px solid #e2e8f0;" />

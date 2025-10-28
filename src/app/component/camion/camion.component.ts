@@ -3,6 +3,8 @@ import { CamionControllerService } from '../../api/api/camionController.service'
 import { CamionDTO } from '../../api/model/camionDTO';
 import { ProjetControllerService } from '../../api/api/projetController.service';
 import { ProjetActifService } from '../../service/projet-actif.service';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmCodeDialogComponent } from '../../shared/confirm-code-dialog.component';
 import { BreadcrumbItem } from '../breadcrumb/breadcrumb.component';
 
 @Component({
@@ -41,10 +43,20 @@ export class CamionComponent {
   
   Math = Math;
 
+  // Modal de confirmation/erreur (comme Depot)
+  showConfirmModal: boolean = false;
+  showErrorModal: boolean = false;
+  modalTitle: string = '';
+  modalMessage: string = '';
+  modalIcon: string = '';
+  modalIconColor: string = '';
+  camionToDelete: number | null = null;
+
   constructor(
     private camionService: CamionControllerService,
     private projetService: ProjetControllerService,
-    private projetActifService: ProjetActifService
+    private projetActifService: ProjetActifService,
+    private dialog: MatDialog
   ) {
     // 🔥 Écouter les changements du projet actif
     this.projetActifService.projetActif$.subscribe(projet => {
@@ -72,6 +84,72 @@ export class CamionComponent {
       this.loadProjetDetails(this.contextProjetId, true);
     }
     this.loadCamions();
+  }
+
+  requestDeleteCamion(id?: number) {
+    if (id === undefined) return;
+    const dialogRef = this.dialog.open(ConfirmCodeDialogComponent, { disableClose: true });
+    dialogRef.afterClosed().subscribe((ok: boolean) => {
+      if (ok === true) {
+        this.camionToDelete = id;
+        this.showConfirmModal = true;
+        this.modalTitle = 'Confirmer la suppression';
+        this.modalMessage = 'Êtes-vous sûr de vouloir supprimer ce camion ? Cette action est irréversible.';
+        this.modalIcon = 'bi-trash-fill';
+        this.modalIconColor = '#ef4444';
+      }
+    });
+  }
+
+  async confirmDelete() {
+    if (this.camionToDelete === null) return;
+    this.camionService.deleteCamion(this.camionToDelete, 'body').subscribe({
+      next: () => {
+        this.showConfirmModal = false;
+        this.camionToDelete = null;
+        this.loadCamions();
+      },
+      error: async (err: any) => {
+        console.error('Erreur suppression camion:', err);
+        this.showConfirmModal = false;
+        this.showErrorModal = true;
+        this.modalTitle = 'Erreur de suppression';
+
+        if (err && err.status === 400) {
+          this.modalMessage = 'Impossible de supprimer : ce camion est référencé dans un ou plusieurs voyages.';
+        } else if (err && err.status === 403) {
+          this.modalMessage = 'Vous n\'avez pas les permissions nécessaires pour supprimer ce camion.';
+        } else {
+          let errorMessage = 'Une erreur est survenue lors de la suppression.';
+          if (err && err.error instanceof Blob) {
+            try {
+              const text = await err.error.text();
+              if (text && text.trim()) errorMessage = text;
+            } catch (e) {
+              console.error('Erreur parsing blob error:', e);
+            }
+          } else if (err && err.error?.message) {
+            errorMessage = err.error.message;
+          } else if (err && err.message) {
+            errorMessage = err.message;
+          }
+
+          const errorText = JSON.stringify(err || '');
+          if (errorText.includes('foreign key') || errorText.includes('constraint') || errorText.includes('DataIntegrityViolationException')) {
+            errorMessage = 'Impossible de supprimer : ce camion est référencé dans un ou plusieurs voyages.';
+          }
+          this.modalMessage = errorMessage;
+        }
+
+        this.modalIcon = 'bi-x-circle-fill';
+        this.modalIconColor = '#ef4444';
+      }
+    });
+  }
+
+  cancelDelete() {
+    this.showConfirmModal = false;
+    this.camionToDelete = null;
   }
 
   // 🔥 Méthode pour recharger toutes les données
@@ -189,15 +267,16 @@ export class CamionComponent {
   }
 
   updateCamion() {
-    if (!this.selectedCamion?.id) return;
-    this.camionService.createCamion(this.selectedCamion, 'body').subscribe({
+    // Use dialogCamion (bound to modal inputs) for updates
+    if (!this.dialogCamion?.id) return;
+    const id = this.dialogCamion.id;
+    this.camionService.updateCamion(id, this.dialogCamion, 'body').subscribe({
       next: (updated) => {
-        const idx = this.camions.findIndex(c => c.id === updated.id);
-        if (idx > -1) this.camions[idx] = updated;
-        this.filteredCamions = [...this.camions];
-        this.updatePagination();
+        // Reload camions list to reflect changes reliably (handles blob/text responses)
+        this.loadCamions();
         this.selectedCamion = null;
         this.editMode = false;
+        this.showAddDialog = false;
       },
       error: (err) => this.error = 'Erreur modification: ' + (err.error?.message || err.message)
     });
@@ -214,6 +293,7 @@ export class CamionComponent {
       error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
     });
   }
+  
 
   cancelEdit() {
     this.selectedCamion = null;

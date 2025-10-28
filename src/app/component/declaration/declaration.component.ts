@@ -78,7 +78,7 @@ export class DeclarationComponent implements OnInit {
       next: (data: DeclarationDTO[]) => {
         this.declarations = data;
         this.totalItems = data.length;
-        console.log(`✅ ${data.length} déclaration(s) chargée(s) pour le projet ${projetId}`);
+        // console.log(`✅ ${data.length} déclaration(s) chargée(s) pour le projet ${projetId}`);
       },
       error: (error: any) => {
         console.error('Erreur lors du chargement des déclarations:', error);
@@ -157,7 +157,7 @@ export class DeclarationComponent implements OnInit {
 
     this.declarationService.createDeclaration(this.newDeclaration).subscribe({
       next: (data: DeclarationDTO) => {
-        console.log('✅ Déclaration créée:', data);
+        // console.log('✅ Déclaration créée:', data);
         if (this.selectedProjetId) {
           this.loadDeclarationsByProjet(this.selectedProjetId);
         }
@@ -177,7 +177,7 @@ export class DeclarationComponent implements OnInit {
 
     this.declarationService.updateDeclaration(this.editingDeclaration.id, this.editingDeclaration).subscribe({
       next: (data: DeclarationDTO) => {
-        console.log('✅ Déclaration mise à jour:', data);
+        // console.log('✅ Déclaration mise à jour:', data);
         if (this.selectedProjetId) {
           this.loadDeclarationsByProjet(this.selectedProjetId);
         }
@@ -197,7 +197,7 @@ export class DeclarationComponent implements OnInit {
 
     this.declarationService.deleteDeclaration(this.declarationToDelete.id).subscribe({
       next: () => {
-        console.log('✅ Déclaration supprimée');
+        // console.log('✅ Déclaration supprimée');
         if (this.selectedProjetId) {
           this.loadDeclarationsByProjet(this.selectedProjetId);
         }

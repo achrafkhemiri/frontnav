@@ -75,7 +75,7 @@
             <div class="client-meta">
               <span class="meta-item">
                 <i class="bi bi-box-seam"></i>
-                Quantité autorisée: <strong>{{ getQuantiteAutorisee(selectedDepot.id) | number:'1.0-2' }} kg</strong>
+                Quantité autorisée: <strong>{{ getQuantiteAutorisee(selectedDepot.id)}} kg</strong>
               </span>
             </div>
           </div>
@@ -98,7 +98,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-label">Total Livré</div>
-              <div class="stat-value">{{ getTotalLivre() | number:'1.0-2' }} kg</div>
+              <div class="stat-value">{{ getTotalLivre()  }} kg</div>
             </div>
           </div>
           <div class="stat-card">
@@ -108,7 +108,7 @@
             <div class="stat-info">
               <div class="stat-label">Reste</div>
               <div class="stat-value" [style.color]="getResteColor()">
-                {{ getReste() | number:'1.0-2' }} kg
+                {{ getReste()  }} kg
               </div>
             </div>
           </div>
@@ -247,7 +247,7 @@
               <td>{{ getChauffeurNom(voyage.chauffeurId) }}</td>
               <td>
                 <span class="poids-badge depot">
-                  {{ voyage.poidsDepot | number:'1.0-2' }}
+                  {{ voyage.poidsDepot  }}
                 </span>
               </td>
               <td>
@@ -256,7 +256,7 @@
                   'zero': getResteCumule(voyage, i) === 0,
                   'negative': getResteCumule(voyage, i) < 0
                 }">
-                  {{ getResteCumule(voyage, i) | number:'1.0-2' }}
+                  {{ getResteCumule(voyage, i)  }}
                 </span>
                 <i *ngIf="getResteCumule(voyage, i) < 0" class="bi bi-exclamation-triangle text-danger ms-1" 
                    title="Dépassement détecté"></i>
@@ -278,12 +278,12 @@
               </td>
               <td>
                 <span class="total-badge depot">
-                  {{ getTotalLivre() | number:'1.0-2' }} kg
+                  {{ getTotalLivre() }} kg
                 </span>
               </td>
               <td>
                 <span class="total-badge" [style.color]="getResteColor()">
-                  {{ getReste() | number:'1.0-2' }} kg
+                  {{ getReste() }} kg
                 </span>
               </td>
             </tr>

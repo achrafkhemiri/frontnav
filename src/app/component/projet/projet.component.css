@@ -883,19 +883,24 @@
   height: 100%;
   border-radius: 20px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: white;
-  overflow: hidden;
+  /* Use transform on Y for flip, keep smooth transition */
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d; /* required for 3D flip */
+  background: transparent; /* transparent to avoid white flash */
+  overflow: visible; /* allow 3D perspective */
 }
 
-.projet-card:hover {
-  transform: translateY(-8px);
+.projet-card:hover:not(.flipped) {
+  /* subtle lift only when NOT flipped */
+  transform: translateY(-6px);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
 }
 
-/* Face avant visible */
+/* Front face - must be absolute to properly stack with back face */
 .projet-card-front {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   border-radius: 20px;
@@ -903,11 +908,35 @@
   background: white;
   display: flex;
   flex-direction: column;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: rotateY(0deg); /* explicit front rotation */
+  z-index: 2;
 }
 
-/* Face arrière masquée */
+/* Back face (visible when .projet-card has .flipped) */
 .projet-card-back {
-  display: none !important;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  display: block; /* ensure visible for flip */
+  z-index: 1;
+}
+
+/* When flipped, rotate the card container so back face shows upright */
+.projet-card.flipped {
+  transform: rotateY(180deg) !important;
+}
+
+.projet-card.flipped:hover {
+  /* Keep rotation when hovering the flipped card */
+  transform: rotateY(180deg) translateY(-6px) !important;
 }
 
 /* Header de la carte avec gradient magnifique */
@@ -1254,9 +1283,20 @@
    ============================================ */
 
 .projet-card-back {
+  /* Keep the back face positioned and rotated so it appears upright when the card is flipped */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  transform: rotateY(180deg);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
   display: flex;
   flex-direction: column;
   gap: 0;
+  overflow: auto;
 }
 
 .back-header {
@@ -1975,7 +2015,8 @@
 /* Modal moderne */
 .modern-modal {
   border-radius: 20px;
-  overflow: hidden;
+  /* Allow inner shadows and floating elements to be visible (don't clip) */
+  overflow: visible;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
 }
 
@@ -1983,6 +2024,9 @@
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 24px 30px;
   border: none;
+  /* keep rounded corners on the header when parent allows visible overflow */
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
 }
 
 .modern-header .header-content {
@@ -2010,7 +2054,15 @@
 
 .modern-body {
   padding: 30px;
+  padding-right: 28px; /* reserve space so vertical scrollbar doesn't overlap content */
   background: #f8f9fa;
+  box-sizing: border-box;
+}
+
+/* When using modal-dialog-scrollable ensure the body scrolls within a max height so backgrounds and corners remain visible */
+.modal-dialog.modal-lg .modern-modal .modern-body {
+  max-height: calc(90vh - 160px);
+  overflow-y: auto;
 }
 
 /* Section du formulaire */
@@ -2020,6 +2072,8 @@
   padding: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .form-section:hover {
@@ -2703,6 +2757,9 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  /* Keep rounded bottom corners when modal parent has visible overflow */
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
 }
 
 .btn-cancel-modal {

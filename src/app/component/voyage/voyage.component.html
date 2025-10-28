@@ -243,7 +243,7 @@
               {{ getTotalWeightLabel() }}
             </h3>
             <p style="margin: 0; color: white; font-size: 32px; font-weight: 700; line-height: 1.2;">
-              {{ getTotalWeight() | number:'1.0-2' }} <span style="font-size: 20px; font-weight: 500; opacity: 0.9;">kg</span>
+              {{ getTotalWeight()  }} <span style="font-size: 20px; font-weight: 500; opacity: 0.9;">kg</span>
             </p>
           </div>
         </div>
@@ -253,7 +253,7 @@
               <i class="bi bi-person-fill"></i> Poids Client
             </div>
             <div style="color: white; font-size: 20px; font-weight: 700;">
-              {{ getTotalClientWeight() | number:'1.0-2' }} kg
+              {{ getTotalClientWeight() }} 
             </div>
           </div>
           <div style="text-align: center; padding: 12px 20px; background: rgba(255, 255, 255, 0.15); border-radius: 10px; backdrop-filter: blur(10px);">
@@ -261,7 +261,7 @@
               <i class="bi bi-building"></i> Poids Dépôt
             </div>
             <div style="color: white; font-size: 20px; font-weight: 700;">
-              {{ getTotalDepotWeight() | number:'1.0-2' }} kg
+              {{ getTotalDepotWeight()  }} 
             </div>
           </div>
           <div style="text-align: center; padding: 12px 20px; background: rgba(255, 255, 255, 0.15); border-radius: 10px; backdrop-filter: blur(10px);">
@@ -362,7 +362,7 @@
             </td>
             <td style="background: #dbeafe;">
               <ng-container *ngIf="vg.poidsClient !== null && vg.poidsClient !== undefined; else dashClient">
-                {{ vg.poidsClient | number:'1.0-2' }}
+                {{ vg.poidsClient  }}
                 <span *ngIf="getVoyageAutorisationCode(vg)">({{ getVoyageAutorisationCode(vg) }})</span>
               </ng-container>
               <ng-template #dashClient>-</ng-template>
@@ -371,7 +371,7 @@
             <td>{{ getChauffeurInfo(vg.chauffeurId) }}</td>
             <td>
               <span [style.color]="getResteColorForVoyage(vg)" style="font-weight: 600;">
-                {{ getResteForVoyage(vg) | number:'1.0-0' }}
+                {{ getResteForVoyage(vg) }}
               </span>
             </td>
             <td>{{ vg.societeP || '-' }}</td>
