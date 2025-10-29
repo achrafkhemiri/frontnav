@@ -60,8 +60,10 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: false,
     },
-    show: true,
+    // start hidden to avoid flicker
+    show: false,
   });
+  win.once('ready-to-show', () => { try { win.show(); } catch (e) {} });
   // For packaged apps we register and use a custom 'app://' protocol which serves files
   // from the resources path. This avoids Chromium blocking direct file:// access to files
   // inside app.asar ("Not allowed to load local resource"). In dev we load the file:// index.
@@ -89,23 +91,29 @@ function createWindow() {
     } catch(e) {
       console.warn('Could not inject base href script:', e.message);
     }
-    // If the app is packaged, open DevTools automatically to help diagnose rendering issues.
+    // Open DevTools automatically in development to help debugging.
     try {
-      if (app.isPackaged) {
+      // Do not open DevTools automatically. If you need them for debugging,
+      // start the app with the environment variable OPEN_DEVTOOLS=true
+      if (process.env.OPEN_DEVTOOLS === 'true') {
         win.webContents.openDevTools({ mode: 'undocked' });
-        writeStartupLog('Opened DevTools automatically (packaged)');
+        writeStartupLog('Opened DevTools (OPEN_DEVTOOLS=true)');
       }
     } catch (e) {
-      console.warn('Failed to open DevTools automatically:', e.message);
+      console.warn('Failed to open DevTools programmatically:', e.message);
     }
   });
   // log renderer console messages to startup log (helpful when DevTools are closed)
   win.webContents.on('console-message', (ev, level, message, line, sourceId) => {
-    writeStartupLog(`Renderer console [level=${level}] ${message} (${sourceId}:${line})`);
+    const text = `Renderer console [level=${level}] ${message} (${sourceId}:${line})`;
+    writeStartupLog(text);
+    // Also print to main process stdout so we can see it in the terminal logs during development
+    try { console.log(text); } catch (e) { /* ignore */ }
   });
   win.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     const msg = `did-fail-load code=${errorCode} desc=${errorDescription} url=${validatedURL}`;
     writeStartupLog(msg);
+    try { console.error(msg); } catch (e) {}
   });
   // Do not open DevTools or the system console automatically in production/desktop mode.
   // DevTools and logs can still be opened manually with the global shortcut (Ctrl/Cmd+Shift+L)

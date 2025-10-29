@@ -2515,10 +2515,10 @@ Suppression d'un voyage:
         'Camion': camion?.matricule || '',
         'Transporteur': voyage.societe || '',
         'Dépôt': depot?.nom || '',
-        'Poids Dépôt (kg)': voyage.poidsDepot || 0,
+        'Poids Dépôt (kg)': voyage.poidsDepot || '' ,
         'Client': client?.nom || '',
         'N° Client': client?.numero || '',
-        'Poids Client (kg)': voyage.poidsClient || 0,
+        'Poids Client (kg)': voyage.poidsClient || '',
         // ajouter autorisation et reste par code
         'Autorisation': autorisationCode || '',
         'Reste Autorisation (kg)': resteAutorisation,

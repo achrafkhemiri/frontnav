@@ -544,12 +544,54 @@ export class RecapDepotComponent {
   }
 
   getResteCumule(voyage: any, index: number): number {
+    // Calculer le reste cumulé en fonction de la date (anciennes → récentes)
+    return this.computeResteCumuleForVoyage(this.filteredVoyages, voyage);
+  }
+
+  // Helper pour calculer le reste cumulé sur une liste arbitraire (utile pour exports)
+  computeResteCumuleForList(voyagesList: any[], index: number): number {
     const quantiteAutorisee = this.getQuantiteAutorisee(this.selectedDepot?.id);
     let totalLivreJusquIci = 0;
-    for (let i = 0; i <= index; i++) {
-      totalLivreJusquIci += (this.paginatedVoyages[i].poidsDepot || 0);
+    for (let i = 0; i <= index && i < voyagesList.length; i++) {
+      totalLivreJusquIci += (voyagesList[i].poidsDepot || 0);
     }
     return quantiteAutorisee - totalLivreJusquIci;
+  }
+
+  // Calcule le reste cumulé pour un voyage donné en considérant
+  // la liste complète triée par date croissante (anciennes -> récentes).
+  computeResteCumuleForVoyage(voyagesList: any[], targetVoyage: any): number {
+    if (!voyagesList || voyagesList.length === 0) return this.getQuantiteAutorisee(this.selectedDepot?.id);
+
+    const quantiteAutorisee = this.getQuantiteAutorisee(this.selectedDepot?.id);
+
+    // Créer une copie triée par date ascendante
+    const sorted = [...voyagesList].slice().sort((a: any, b: any) => {
+      const da = a?.date ? new Date(a.date).getTime() : 0;
+      const db = b?.date ? new Date(b.date).getTime() : 0;
+      return da - db;
+    });
+
+    let total = 0;
+
+    for (const v of sorted) {
+      total += (v.poidsDepot || 0);
+
+      // Comparer par id si disponible, sinon comparer par date+numTicket+numBonLivraison
+      const sameId = (v.id !== undefined && targetVoyage.id !== undefined) ? v.id === targetVoyage.id : false;
+      const sameByFields = !sameId && (
+        (v.date === targetVoyage.date) &&
+        (v.numTicket === targetVoyage.numTicket) &&
+        (v.numBonLivraison === targetVoyage.numBonLivraison)
+      );
+
+      if (sameId || sameByFields) {
+        return quantiteAutorisee - total;
+      }
+    }
+
+    // Si la cible n'a pas été trouvée (rare), retourner reste total
+    return quantiteAutorisee - total;
   }
 
   getResteColor(): string {
@@ -615,15 +657,15 @@ export class RecapDepotComponent {
       }
     }
     
-    // Tableau des voyages
-    const tableData = this.filteredVoyages.map(v => [
+    // Tableau des voyages — utiliser le reste cumulé (comme dans le tableau affiché)
+    const tableData = this.filteredVoyages.map((v, idx) => [
       v.date ? v.date.substring(0, 10) : '',
       v.numBonLivraison || '',
       v.numTicket || '',
       this.getCamionMatricule(v.camionId),
       this.getChauffeurNom(v.chauffeurId),
       (v.poidsDepot || 0).toFixed(2),
-      (v.reste || 0).toFixed(2)
+      this.computeResteCumuleForVoyage(this.filteredVoyages, v).toFixed(2)
     ]);
     
     autoTable(doc, {
@@ -718,7 +760,7 @@ export class RecapDepotComponent {
         this.getCamionMatricule(v.camionId),
         this.getChauffeurNom(v.chauffeurId),
         (v.poidsDepot || 0).toFixed(2),
-        (v.reste || 0).toFixed(2)
+        this.computeResteCumuleForVoyage(this.filteredVoyages, v).toFixed(2)
       ]);
     });
     

@@ -1343,6 +1343,186 @@ export class DechargementComponent implements OnInit {
       // Ne pas lancer window.print() automatiquement : l'utilisateur peut vérifier et cliquer sur le bouton Imprimer
     }
   }
+  
+  /**
+   * Imprimer une version A5 compacte du bon de sortie
+   * Ouvre une fenêtre au format A5 et déclenche l'impression automatiquement.
+   */
+  printA5Dechargement(dech: DechargementDTO): void {
+    const chargement = this.chargements.find(c => c.id === dech.chargementId);
+    const camion = chargement ? this.camions.find(c => c.id === chargement.camionId) : null;
+    const chauffeur = chargement ? this.chauffeurs.find(c => c.id === chargement.chauffeurId) : null;
+    const client = dech.clientId ? this.clients.find(c => c.id === dech.clientId) : null;
+    const depot = dech.depotId ? this.depots.find(d => d.id === dech.depotId) : null;
+
+    // Récupérer la société (si disponible dans le projet)
+    let societeInfo: SocieteDTO | null = null;
+    if (this.projetActif && Array.isArray((this.projetActif as any).societes)) {
+      if (chargement?.societeP) {
+        societeInfo = (this.projetActif as any).societes.find((s: SocieteDTO) => s.nom === chargement.societeP) || null;
+      }
+      if (!societeInfo && (this.projetActif as any).societes.length > 0) {
+        societeInfo = (this.projetActif as any).societes[0];
+      }
+    }
+
+    const dateDechargement = dech.dateDechargement ? new Date(dech.dateDechargement) : new Date();
+    const dateFormatted = dateDechargement.toLocaleDateString('fr-FR');
+    const heureDepart = dateDechargement.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    const poidsNet = this.calculatePoidsNet(dech);
+
+    const escapeHtml = (s: any) => {
+      if (s === null || s === undefined) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    };
+
+    // Préparer le contact + fallback
+    let contactText = '';
+    const rawContact = societeInfo?.contact;
+    if (rawContact) {
+      try {
+        const parsed = typeof rawContact === 'string' ? JSON.parse(rawContact) : rawContact;
+        if (Array.isArray(parsed)) {
+          contactText = parsed.map(c => `Tel: ${String(c)}`).join(', ');
+        } else if (typeof parsed === 'object') {
+          contactText = Object.values(parsed).map(v => String(v)).join(', ');
+        } else {
+          contactText = `Contact: ${String(parsed)}`;
+        }
+      } catch {
+        contactText = `Contact: ${String(rawContact)}`;
+      }
+    } else {
+      contactText = 'Tel: 71 430 822';
+    }
+
+    // Autorisation / reste (si présent)
+    const autorisationCodePrint = (dech as any).autorisationCode || '';
+    const resteAvantPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint, dech.id) : 0;
+    const resteApresPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint) : 0;
+
+    // Structure identique à l'A4 mais réduite pour tenir A5
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Bon de Sortie A5 - ${escapeHtml(dech.numTicket || dech.numBonLivraison || dech.id)}</title>
+        <style>
+          /* Reduce top whitespace: even smaller page top margin and no body padding */
+          @page { size: A5 portrait; margin: 1mm 1mm 1mm 1mm; }
+          body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+          .container { max-width: 148mm; margin: 0 auto; padding-top:0mm; }
+
+          /* Scaled down sizes compared to A4 */
+          .header { display:flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+          .header-left, .header-right { font-size: 9px; line-height: 1.2; }
+          .company-name { font-size: 12px; font-weight: bold; }
+          .title-section { text-align: center; margin: 6px 0; }
+          .main-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+          .bon-info { font-size: 11px; font-weight: 700; margin: 3px 0; }
+          .product-info { text-align: center; font-size: 10px; margin: 6px 0; line-height: 1.2; }
+          .vehicle-info { display: flex; justify-content: space-between; gap: 6px; margin: 6px 0; font-size: 10px; }
+          .poids-table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 11px; }
+          .poids-table th { background: #667eea; color: white; padding: 5px; text-align: center; font-weight: bold; border: 1px solid #333; }
+          .poids-table td { padding: 6px; text-align: center; font-weight: bold; border: 1px solid #333; font-size: 12px; }
+          .signatures { display:flex; justify-content:space-between; margin-top: 14px; }
+          .signature-block { width: 45%; text-align: center; font-size: 10px; }
+          .signature-line { border-top: 1.5px solid #333; margin-top: 22px; }
+          .print-button { display:block; width:160px; margin: 8px auto; padding: 6px 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:6px; text-decoration:none; text-align:center; font-size:12px; }
+          @media print { .print-button { display:none } }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <!-- Print button moved below to avoid top gap; it will be hidden when printing -->
+          <div class="header">
+            <div class="header-left">
+              <div class="company-name">${escapeHtml(societeInfo?.nom || (chargement?.societeP || 'Société'))}</div>
+              ${societeInfo?.adresse ? `<div>Adresse: ${escapeHtml(societeInfo.adresse)}</div>` : ''}
+              ${societeInfo?.rcs ? `<div>N° RCS: ${escapeHtml(societeInfo.rcs)}</div>` : ''}
+              ${societeInfo?.tva ? `<div>N° TVA: ${escapeHtml(societeInfo.tva)}</div>` : ''}
+              <div>${escapeHtml(contactText)}</div>
+            </div>
+            <div class="header-right">
+              <div style="font-weight:600">${escapeHtml(depot?.nom || client?.nom || '')}</div>
+              ${depot?.adresse || client?.adresse ? `<div style="font-size:10px">Adresse: ${escapeHtml(depot?.adresse || client?.adresse || '')}</div>` : ''}
+              ${(depot?.mf || client?.mf) ? `<div>MF: ${escapeHtml(depot?.mf || client?.mf || '')}</div>` : ''}
+              <div style="font-size:10px">${escapeHtml(dateFormatted)} ${escapeHtml(heureDepart)}</div>
+            </div>
+          </div>
+
+          <!-- print button moved to bottom to avoid pushing content down -->
+
+          <div class="title-section">
+            <div class="main-title">BON DE SORTIE</div>
+            <div class="bon-info">N° Bon: ${escapeHtml(dech.numBonLivraison || 'N/A')}</div>
+            <div class="bon-info">N° Ticket: ${escapeHtml(dech.numTicket || 'N/A')}</div>
+          </div>
+
+          <div class="product-info">
+            <div><strong>Produit:</strong> ${escapeHtml(dech.produit || 'N/A')} &nbsp; <strong>Navire:</strong> ${escapeHtml(dech.navire || 'N/A')} &nbsp; <strong>Port:</strong> ${escapeHtml(dech.port || 'N/A')}</div>
+            <div style="margin-top:6px"><strong>Date:</strong> ${escapeHtml(dateFormatted)} &nbsp;&nbsp; <strong>Heure:</strong> ${escapeHtml(heureDepart)}</div>
+          </div>
+
+          <div class="vehicle-info">
+            <div style="text-align:left">
+              <div style="font-weight:600">VEHICULE: ${escapeHtml(camion?.matricule || 'N/A')}</div>
+              <div style="font-size:10px">Chauffeur: ${escapeHtml(chauffeur?.nom || 'N/A')}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:600">Transporteur: ${escapeHtml(camion?.societe || dech.societe || 'N/A')}</div>
+              <div style="font-size:10px">CIN: ${escapeHtml(chauffeur?.numCin || 'N/A')}</div>
+            </div>
+          </div>
+
+          <table class="poids-table">
+            <thead>
+              <tr>
+                <th>Poids Brut</th>
+                <th>Poids Tare</th>
+                <th>Poids Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${Math.round(dech.poidComplet || 0)}</td>
+                <td>${Math.round(dech.poidCamionVide || 0)}</td>
+                <td>${Math.round(poidsNet)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="signatures">
+            <div class="signature-block">
+              <div class="signature-label">Signature Agent Port</div>
+              <div class="signature-line"></div>
+            </div>
+            <div class="signature-block">
+              <div class="signature-label">Signature Chauffeur</div>
+              <div class="signature-line"></div>
+            </div>
+          </div>
+
+          <!-- print button placed at the bottom so it doesn't create top whitespace -->
+          <div style="text-align:center; margin-top:8px;">
+            <button class="print-button" onclick="window.print()">🖨️ Imprimer le bon</button>
+          </div>
+
+        </div>
+      </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank', 'width=700,height=800');
+    if (!w) { alert('Impossible d\'ouvrir la fenêtre d\'impression. Autorisez les popups.'); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => {
+      try { w.focus(); w.print(); } catch (e) { console.warn('printA5Dechargement: print failed', e); }
+    }, 600);
+  }
   //decharge imprimer chroufa
   //<div><strong>code ticket d'autorisation:</strong> ${autorisationCodePrint || 'N/A'} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>Reste Ticket:</strong> ${resteApresPrint} kg</div>
   //<div class="bon-info">code ticket d\'autorisation: ${(dech as any).autorisationCode || 'N/A'}</div>

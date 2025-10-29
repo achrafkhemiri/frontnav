@@ -1097,268 +1097,245 @@ export class DepotComponent {
 
   // Export PDF
   exportToPDF(): void {
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4'
-    });
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
     // Titre
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.text('Liste des Dépôts', 14, 15);
 
-    // Informations du projet
-    if (this.projetActif) {
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'normal');
-      let yPos = 25;
-      
-      if (this.projetActif.nomNavire) {
-        doc.text(`Navire: ${this.projetActif.nomNavire}`, 14, yPos);
-        yPos += 6;
-      }
-      if (this.projetActif.port) {
-        doc.text(`Port: ${this.projetActif.port}`, 14, yPos);
-        yPos += 6;
-      }
-      if (this.projetActif.nomProduit) {
-        doc.text(`Produit: ${this.projetActif.nomProduit}`, 14, yPos);
-        yPos += 6;
-      }
-      // Afficher les sociétés si disponibles (projet.societeNoms peut être Set ou array)
-      const societesSet = (this.projetActif && (this.projetActif as any).societeNoms) ? (this.projetActif as any).societeNoms : null;
+    // Informations du projet (contexte prioritaire)
+    const projet = this.contextProjet || this.projetActif;
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    let yPos = 25;
+    if (projet) {
+      if (projet.nomNavire) { doc.text(`Navire: ${projet.nomNavire}`, 14, yPos); yPos += 6; }
+      if (projet.port) { doc.text(`Port: ${projet.port}`, 14, yPos); yPos += 6; }
+      if (projet.nomProduit) { doc.text(`Produit: ${projet.nomProduit}`, 14, yPos); yPos += 6; }
+      if (projet.nom) { doc.text(`Projet: ${projet.nom}`, 14, yPos); yPos += 6; }
+      const societesSet = (projet as any)?.societeNoms || null;
       let societesStr = '';
       if (societesSet) {
-        try {
-          societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', ');
-        } catch {
-          societesStr = String(societesSet);
-        }
+        try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); }
       }
-      if (societesStr) {
-        doc.text(`Sociétés: ${societesStr}`, 14, yPos);
-        // plus grand espacement après sociétés pour meilleure lisibilité
-        yPos += 10;
-      }
-      // Afficher la date de début du projet si disponible
-      if ((this.projetActif as any).dateDebut) {
-        try {
-          doc.text(`Date début projet: ${this.formatDate((this.projetActif as any).dateDebut)}`, 14, yPos);
-          yPos += 6;
-        } catch {}
-      }
+      if (societesStr) { doc.text(`Sociétés: ${societesStr}`, 14, yPos); yPos += 8; }
     }
 
     // Statistiques
     const totalDepots = this.filteredDepots.length;
-    const totalVendu = this.filteredDepots.reduce((sum, d) => 
-      sum + (this.getTotalLivreDepot(d.id) || 0), 0
-    );
-
+    const totalVendu = this.filteredDepots.reduce((sum, d) => sum + (this.getTotalLivreDepot(d.id) || 0), 0);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    let statsY = this.projetActif ? 60 : 40;
+    let statsY = projet ? Math.max(yPos + 6, 55) : 40;
     doc.text(`Total Dépôts: ${totalDepots}`, 14, statsY);
-    doc.text(`Quantité Totale Vendue: ${totalVendu.toFixed(2)} kg`, 80, statsY);
+    doc.text(`Quantité Totale Vendue: ${totalVendu.toFixed(2)} kg`, 90, statsY);
 
-    // Filtres appliqués
-    // Filtres appliqués
     if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(9);
       statsY += 6;
       let filterText = 'Filtre par date: ';
-      if (this.dateDebut && this.dateFin) {
-        filterText += `${this.formatDate(this.dateDebut)} - ${this.formatDate(this.dateFin)}`;
-      } else if (this.dateDebut) {
-        filterText += `À partir du ${this.formatDate(this.dateDebut)}`;
-      } else if (this.dateFin) {
-        filterText += `Jusqu'au ${this.formatDate(this.dateFin)}`;
-      }
+      if (this.dateDebut && this.dateFin) filterText += `${this.formatDate(this.dateDebut)} - ${this.formatDate(this.dateFin)}`;
+      else if (this.dateDebut) filterText += `À partir du ${this.formatDate(this.dateDebut)}`;
+      else if (this.dateFin) filterText += `Jusqu'au ${this.formatDate(this.dateFin)}`;
       doc.text(filterText, 14, statsY);
     }
 
-    // Préparer les données du tableau
+    // Préparer les données du tableau avec colonnes supplémentaires (PDF)
     const tableData = this.filteredDepots.map(depot => {
-      const quantiteVendue = this.getTotalLivreDepot(depot.id);
-      
+      const quantiteAutorisee = depot.quantiteAutorisee || 0;
+      const quantiteVendue = this.getQuantiteLivree(depot);
+      const reste = quantiteAutorisee - quantiteVendue;
+      const pct = quantiteAutorisee === 0 ? 0 : (quantiteVendue / quantiteAutorisee) * 100;
       return [
         depot.nom || '-',
         depot.adresse || '-',
         depot.mf || '-',
-        quantiteVendue.toFixed(2)
+        quantiteAutorisee,
+        quantiteVendue,
+        reste,
+        pct
       ];
     });
 
-    // Générer le tableau
+    // Générer le tableau (compressé pour tenir sur une page paysage A4)
+    // Calculer la largeur imprimable pour répartir les colonnes
+    const pageWidth = (doc.internal.pageSize.width || (doc.internal.pageSize as any).getWidth()) - 20; // 10mm margins
+    // Répartition en mm (approx) : Nom 50, Adresse 80, MF 40, Qta 30, Qtl 30, Reste 30, % 15
+    const colWidths = [50, 80, 40, 30, 30, 30, 15];
+    // Si la somme dépasse la pageWidth, réduire proportionnellement
+    const sum = colWidths.reduce((s, v) => s + v, 0);
+    let scale = 1;
+    if (sum > pageWidth) scale = pageWidth / sum;
+    const finalWidths = colWidths.map(w => Math.floor(w * scale));
+
     autoTable(doc, {
       startY: statsY + 10,
-      head: [['Nom', 'Adresse', 'Matricule Fiscal', 'Quantité Vendue (kg)']],
-      body: tableData,
+      head: [[
+        'Nom', 'Adresse', 'Matricule Fiscal', 'Quantité Autorisée (kg)',
+        'Quantité Livrée (kg)', 'Reste (kg)', '% Utilisé'
+      ]],
+      body: tableData.map(row => row.map((cell, idx) => {
+        // Formatage des nombres pour affichage (PDF)
+        if (idx >= 3 && typeof cell === 'number') {
+          if (idx === 6) return (cell as number).toFixed(1) + ' %';
+          return (cell as number).toFixed(2);
+        }
+        return cell;
+      })),
       theme: 'grid',
-      styles: {
-        fontSize: 9,
-        cellPadding: 3
-      },
-      headStyles: {
-        fillColor: [251, 191, 36], // Couleur jaune/orange pour les dépôts
-        textColor: [0, 0, 0],
-        fontStyle: 'bold',
-        fontSize: 10
-      },
+      margin: { left: 10, right: 10 },
+      tableWidth: pageWidth,
+      styles: { fontSize: 7, cellPadding: 1, overflow: 'linebreak' },
+      headStyles: { fillColor: [251, 191, 36], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8 },
       columnStyles: {
-        0: { cellWidth: 60 },
-        1: { cellWidth: 80 },
-        2: { cellWidth: 50 },
-        3: { cellWidth: 40, halign: 'right' }
+        0: { cellWidth: finalWidths[0] },
+        1: { cellWidth: finalWidths[1] },
+        2: { cellWidth: finalWidths[2] },
+        3: { cellWidth: finalWidths[3], halign: 'right' },
+        4: { cellWidth: finalWidths[4], halign: 'right' },
+        5: { cellWidth: finalWidths[5], halign: 'right' },
+        6: { cellWidth: finalWidths[6], halign: 'right' }
       },
       didDrawPage: (data) => {
-        // Footer
         const pageCount = (doc as any).internal.getNumberOfPages();
         const pageSize = doc.internal.pageSize;
         const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
         doc.setFontSize(8);
         doc.setFont('helvetica', 'normal');
-        doc.text(
-          `Page ${data.pageNumber} / ${pageCount} - Généré le ${new Date().toLocaleDateString('fr-FR')}`,
-          14,
-          pageHeight - 10
-        );
+        doc.text(`Page ${data.pageNumber} / ${pageCount} - Généré le ${new Date().toLocaleDateString('fr-FR')}`, 10, pageHeight - 10);
       }
     });
 
-    // Télécharger le PDF
-    const fileName = `Depots_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.pdf`;
+    // Nom de fichier plus lisible (utilise le nom du projet si disponible)
+    const safeName = (projet?.nom || projet?.nomNavire || 'Liste').toString().replace(/[^a-z0-9_\-\s]/ig, '').replace(/\s+/g, '_');
+    const yyyy = new Date().toISOString().slice(0,10);
+    const fileName = `Depots_${safeName}_${yyyy}.pdf`;
     doc.save(fileName);
   }
 
   // Export Excel
   exportToExcel(): void {
-    // Préparer les données
+    // Préparer les données avec colonnes supplémentaires
     const data = this.filteredDepots.map(depot => {
-      const quantiteVendue = this.getTotalLivreDepot(depot.id);
-      
+      const quantiteAutorisee = depot.quantiteAutorisee || 0;
+      const quantiteVendue = this.getQuantiteLivree(depot);
+      const reste = quantiteAutorisee - quantiteVendue;
+      const pct = quantiteAutorisee === 0 ? 0 : (quantiteVendue / quantiteAutorisee) * 100;
       return {
         'Nom': depot.nom || '-',
         'Adresse': depot.adresse || '-',
         'Matricule Fiscal': depot.mf || '-',
-        'Quantité Vendue (kg)': quantiteVendue.toFixed(2)
+        'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(2),
+        'Quantité Livrée (kg)': quantiteVendue.toFixed(2),
+        'Reste (kg)': reste.toFixed(2),
+        '% Utilisé': pct.toFixed(1) + ' %'
       };
     });
 
-    // Créer la feuille de calcul avec en-tête projet (titre + meta)
-    const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+  // Créer la feuille de calcul avec en-tête projet (titre + meta)
+  const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
     ws['!merges'] = ws['!merges'] || [];
     let currentRow = 0;
 
-    // Titre principal
     XLSX.utils.sheet_add_aoa(ws, [[`LISTE DES DÉPÔTS`]], { origin: { r: currentRow, c: 0 } });
-    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } });
     currentRow++;
 
-    // Informations du projet (navire / port / produit / projet)
     const projet = this.contextProjet || this.projetActif;
     if (projet) {
-      if (projet.nomNavire) {
-        XLSX.utils.sheet_add_aoa(ws, [[`Navire: ${projet.nomNavire}`]], { origin: { r: currentRow, c: 0 } });
-        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
-        currentRow++;
-      }
-      if (projet.port) {
-        XLSX.utils.sheet_add_aoa(ws, [[`Port: ${projet.port}`]], { origin: { r: currentRow, c: 0 } });
-        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
-        currentRow++;
-      }
-      if (projet.nomProduit) {
-        XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${projet.nomProduit}`]], { origin: { r: currentRow, c: 0 } });
-        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
-        currentRow++;
-      }
-      if (projet.nom) {
-        XLSX.utils.sheet_add_aoa(ws, [[`Projet: ${projet.nom}`]], { origin: { r: currentRow, c: 0 } });
-        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
-        currentRow++;
-      }
-      // Sociétés du projet si disponibles
-      const societesSet = projet && (projet as any).societeNoms ? (projet as any).societeNoms : null;
+      if (projet.nomNavire) { XLSX.utils.sheet_add_aoa(ws, [[`Navire: ${projet.nomNavire}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
+      if (projet.port) { XLSX.utils.sheet_add_aoa(ws, [[`Port: ${projet.port}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
+      if (projet.nomProduit) { XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${projet.nomProduit}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
+      if (projet.nom) { XLSX.utils.sheet_add_aoa(ws, [[`Projet: ${projet.nom}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
+      const societesSet = (projet as any)?.societeNoms || null;
       let societesStr = '';
-      if (societesSet) {
-        try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); }
-      }
-      if (societesStr) {
-        XLSX.utils.sheet_add_aoa(ws, [[`Sociétés: ${societesStr}`]], { origin: { r: currentRow, c: 0 } });
-        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
-        currentRow++;
-        // ajouter une ligne vide pour créer une marge visuelle
-        currentRow++;
-      }
-      // Date début du projet si disponible
-      if ((projet as any).dateDebut) {
-        try {
-          XLSX.utils.sheet_add_aoa(ws, [[`Date début projet: ${this.formatDate((projet as any).dateDebut)}`]], { origin: { r: currentRow, c: 0 } });
-          ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 3 } });
-          currentRow++;
-        } catch {}
-      }
+      if (societesSet) { try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); } }
+      if (societesStr) { XLSX.utils.sheet_add_aoa(ws, [[`Sociétés: ${societesStr}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; currentRow++; }
+      if ((projet as any).dateDebut) { try { XLSX.utils.sheet_add_aoa(ws, [[`Date début projet: ${this.formatDate((projet as any).dateDebut)}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; } catch {} }
     }
 
-    // Ligne vide
     currentRow++;
 
-    // Ajouter les données à partir de currentRow
-    XLSX.utils.sheet_add_json(ws, data, { origin: { r: currentRow, c: 0 } });
+  // Ajouter les données (les valeurs numériques sont des nombres, pas des chaînes)
+  XLSX.utils.sheet_add_json(ws, data, { origin: { r: currentRow, c: 0 }, header: Object.keys(data[0] || {}), skipHeader: false });
 
     // Définir la largeur des colonnes
     ws['!cols'] = [
       { wch: 30 }, // Nom
       { wch: 50 }, // Adresse
       { wch: 25 }, // MF
-      { wch: 20 }  // Quantité Vendue
+      { wch: 20 }, // Quantité Autorisée
+      { wch: 20 }, // Quantité Livrée
+      { wch: 18 }, // Reste
+      { wch: 12 }  // % Utilisé
     ];
 
-    // Créer le classeur
     const wb: XLSX.WorkBook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Dépôts');
 
-    // Ajouter une feuille de statistiques
-    const totalDepots = this.filteredDepots.length;
-    const totalVendu = this.filteredDepots.reduce((sum, d) => 
-      sum + (this.getTotalLivreDepot(d.id) || 0), 0
-    );
+    // Post-traitement: formater les colonnes numériques et activer filtre + gel d'entête
+    try {
+      // Déterminer la plage utilisée
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
 
-    const statsData = [
-      { 'Statistique': 'Total Dépôts', 'Valeur': totalDepots },
-      { 'Statistique': 'Quantité Totale Vendue (kg)', 'Valeur': totalVendu.toFixed(2) }
-    ];
+      // Appliquer format numérique pour colonnes 4..6 (index 3..6) et pourcentage sur la dernière
+      for (let R = range.s.r + 1; R <= range.e.r; ++R) { // +1 pour sauter l'en-tête
+        // Quantité Autorisée (col D / index 3)
+        const cellD = XLSX.utils.encode_cell({ r: R, c: 3 });
+        if (ws[cellD]) { ws[cellD].t = 'n'; ws[cellD].z = '0.00'; ws[cellD].v = Number(ws[cellD].v); }
 
-    if (this.projetActif) {
-      statsData.unshift(
-        { 'Statistique': 'Navire', 'Valeur': this.projetActif.nomNavire || '-' },
-        { 'Statistique': 'Port', 'Valeur': this.projetActif.port || '-' },
-        { 'Statistique': 'Produit', 'Valeur': this.projetActif.nomProduit || '-' }
-      );
-      // Ajouter les sociétés si disponibles
-      const societesSet = (this.projetActif && (this.projetActif as any).societeNoms) ? (this.projetActif as any).societeNoms : null;
-      let societesStr = '';
-      if (societesSet) {
-        try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); }
+        // Quantité Livrée (col E / index 4)
+        const cellE = XLSX.utils.encode_cell({ r: R, c: 4 });
+        if (ws[cellE]) { ws[cellE].t = 'n'; ws[cellE].z = '0.00'; ws[cellE].v = Number(ws[cellE].v); }
+
+        // Reste (col F / index 5)
+        const cellF = XLSX.utils.encode_cell({ r: R, c: 5 });
+        if (ws[cellF]) { ws[cellF].t = 'n'; ws[cellF].z = '0.00'; ws[cellF].v = Number(ws[cellF].v); }
+
+        // % Utilisé (col G / index 6) - stocké en pourcentage (0-100) -> convertir en fraction
+        const cellG = XLSX.utils.encode_cell({ r: R, c: 6 });
+        if (ws[cellG]) {
+          const raw = Number(ws[cellG].v);
+          ws[cellG].t = 'n';
+          // convert to fraction for Excel percent format
+          ws[cellG].v = isNaN(raw) ? 0 : raw / 100;
+          ws[cellG].z = '0.0%';
+        }
       }
-      if (societesStr) {
-        statsData.splice(3, 0, { 'Statistique': 'Sociétés', 'Valeur': societesStr });
-      }
-      // Ajouter la date de début du projet si disponible
-      if ((this.projetActif as any).dateDebut) {
-        statsData.splice(3, 0, { 'Statistique': 'Date début projet', 'Valeur': this.formatDate((this.projetActif as any).dateDebut) });
-      }
+
+      // Activer autofilter sur toute la table
+      (ws as any)['!autofilter'] = { ref: ws['!ref'] };
+
+      // Geler la 1ère ligne (vue du classeur)
+      (wb as any).Workbook = (wb as any).Workbook || {};
+      (wb as any).Workbook.Views = [{ xSplit: 0, ySplit: currentRow + 1, topLeftCell: 'A2', activeTab: 0 }];
+    } catch (e) {
+      // Si quelque chose échoue, ne pas bloquer l'export
+      console.warn('Post-traitement Excel échoué:', e);
     }
+
+  // Feuille de statistiques
+  const totalVendu = this.filteredDepots.reduce((sum, d) => sum + (this.getQuantiteLivree(d) || 0), 0);
+  const totalDepots = this.filteredDepots.length;
+  const statsData: any[] = [];
+    if (projet) {
+      statsData.push({ 'Statistique': 'Projet', 'Valeur': projet.nom || '-' });
+      statsData.push({ 'Statistique': 'Navire', 'Valeur': projet.nomNavire || '-' });
+      statsData.push({ 'Statistique': 'Port', 'Valeur': projet.port || '-' });
+      statsData.push({ 'Statistique': 'Produit', 'Valeur': projet.nomProduit || '-' });
+    }
+    statsData.push({ 'Statistique': 'Total Dépôts', 'Valeur': totalDepots });
+    statsData.push({ 'Statistique': 'Quantité Totale Vendue (kg)', 'Valeur': totalVendu.toFixed(2) });
 
     const wsStats: XLSX.WorkSheet = XLSX.utils.json_to_sheet(statsData);
     wsStats['!cols'] = [{ wch: 30 }, { wch: 30 }];
     XLSX.utils.book_append_sheet(wb, wsStats, 'Statistiques');
 
-    // Télécharger le fichier
-    const fileName = `Depots_${this.projetActif?.nomNavire || 'Liste'}_${new Date().toLocaleDateString('fr-FR').replace(/\//g, '-')}.xlsx`;
+    const safeName = (projet?.nom || projet?.nomNavire || 'Liste').toString().replace(/[^a-z0-9_\-\s]/ig, '').replace(/\s+/g, '_');
+    const yyyy = new Date().toISOString().slice(0,10);
+    const fileName = `Depots_${safeName}_${yyyy}.xlsx`;
     XLSX.writeFile(wb, fileName);
   }
 }

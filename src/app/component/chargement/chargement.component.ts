@@ -144,6 +144,9 @@ export class ChargementComponent {
   showDepassementModal: boolean = false;
   depassementQuantite: number = 0;
 
+  // Dernier numéro de bon de livraison utilisé (pour auto-incrément)
+  lastNumBonLivraison: number | null = null;
+
   constructor(
     private chargementService: ChargementControllerService,
     private dechargementService: DechargementControllerService,
@@ -492,6 +495,16 @@ export class ChargementComponent {
       _originalClientId: undefined,
       _originalDepotId: undefined
     };
+    // Pré-remplir le numéro de bon de livraison avec le suivant attendu (si disponible)
+    try {
+      const projectKey = this.contextProjetId || this.projetActifId || 'global';
+      const next = this.computeNextNumBonLivraison(projectKey);
+      if (next != null) {
+        this.dialogDechargement.numBonLivraison = String(next);
+      }
+    } catch (e) {
+      console.warn('Impossible de pré-remplir numBonLivraison:', e);
+    }
     this.clientSearchInput = '';
     this.depotSearchInput = '';
     this.showDechargementDialog = true;
@@ -726,6 +739,51 @@ export class ChargementComponent {
     });
   }
 
+  // Helper: compute next numBonLivraison for a project/key
+  private computeNextNumBonLivraison(projectKey: number | string): number | null {
+    // 1) Check sessionStorage for an explicit last stored value
+    const stored = this.getStoredLastNumBonLivraison(projectKey);
+    if (stored != null) return stored + 1;
+
+    // 2) Otherwise, compute from existing dechargements for this project
+    const projetId = typeof projectKey === 'number' ? projectKey : (this.contextProjetId || this.projetActifId);
+    if (projetId == null) return null;
+
+    const nums: number[] = [];
+    (this.dechargements || []).forEach(d => {
+      const v = d && d.numBonLivraison ? String(d.numBonLivraison).trim() : '';
+      if (!v) return;
+      const n = Number(v);
+      if (!Number.isNaN(n) && Number.isFinite(n)) nums.push(Math.trunc(n));
+    });
+
+    if (nums.length === 0) return null;
+    const max = Math.max(...nums);
+    return max + 1;
+  }
+
+  private getStoredLastNumBonLivraison(projectKey: number | string): number | null {
+    try {
+      const key = `lastNumBonLivraison_project_${projectKey}`;
+      const raw = window.sessionStorage.getItem(key);
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) ? Math.trunc(n) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  private storeLastNumBonLivraison(projectKey: number | string, value: number) {
+    try {
+      const key = `lastNumBonLivraison_project_${projectKey}`;
+      window.sessionStorage.setItem(key, String(Math.trunc(value)));
+      this.lastNumBonLivraison = Math.trunc(value);
+    } catch (e) {
+      console.warn('Impossible de stocker lastNumBonLivraison:', e);
+    }
+  }
+
   saveDechargement() {
     // Réinitialiser l'erreur
     this.error = '';
@@ -942,6 +1000,20 @@ export class ChargementComponent {
 
   // Fonction helper pour gérer le succès de création/édition
   private handleDechargementSuccess() {
+    // Après création réussie, mémoriser le numéro de bon de livraison pour le prochain formulaire
+    try {
+      if (!this.editingDechargement && this.dialogDechargement && this.dialogDechargement.numBonLivraison) {
+        const v = String(this.dialogDechargement.numBonLivraison).trim();
+        const n = Number(v);
+        if (!Number.isNaN(n) && Number.isFinite(n)) {
+          const projectKey = this.contextProjetId || this.projetActifId || 'global';
+          this.storeLastNumBonLivraison(projectKey, Math.trunc(n));
+          console.log('💾 Stored last numBonLivraison =', Math.trunc(n), 'for project', projectKey);
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur stockage numBonLivraison:', e);
+    }
     // 🔥 Si societeP a été modifiée OU si le chargement n'a pas de societeP, mettre à jour le chargement
     const needsUpdate = this.dialogDechargement.societeP && 
         this.selectedChargementForDechargement && 
@@ -2160,6 +2232,141 @@ export class ChargementComponent {
 
     printWindow.document.write(content);
     printWindow.document.close();
+  }
+
+  /**
+   * Imprimer en format A4 une feuille soignée reprenant les mêmes coordonnées
+   * Utilise les helpers existants pour formatter la date, camion et chauffeur.
+   */
+  printA4(chargement: ChargementDTO | any): void {
+  const camStr = this.getCamionInfo(chargement.camionId || 0);
+  // Récupérer l'objet chauffeur (pour pouvoir utiliser .nom et .numCin séparément)
+  const chauf = this.chauffeurs.find(c => c.id === (chargement.chauffeurId || 0)) || { nom: '', numCin: '' } as any;
+    const dateStr = this.formatDateTime(chargement.dateChargement);
+
+    const escapeHtml = (s: any) => {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Bon de Chargement A5 - ${escapeHtml(chargement.id)}</title>
+        <style>
+          /* A5 format (148mm x 210mm) - reduced top whitespace */
+          @page { size: A5 portrait; margin: 3mm 6mm 6mm 6mm; }
+          body { font-family: Arial, Helvetica, sans-serif; color: #111827; margin: 0; padding: 0; }
+          /* Reduce top padding so the sheet content sits higher */
+          .sheet { width: 148mm; min-height: 210mm; padding: 6mm 6mm 8mm 6mm; box-sizing: border-box; }
+          .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; }
+          .header { display:flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+          .brand { font-size:16px; font-weight:700; color:#0f172a; }
+          .meta { text-align: right; font-size:12px; color:#475569 }
+          h1 { font-size:18px; margin: 6px 0 8px 0; color:#0f172a }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 8px }
+          .field { font-size:12px; }
+          .label { color:#6b7280; font-size:11px }
+          .value { font-weight:600; color:#0f172a; margin-top:3px }
+          table.info { width:100%; border-collapse: collapse; margin-top: 6px }
+          table.info td { padding:4px 6px; vertical-align: top; }
+          .footer { margin-top:12px; font-size:11px; color:#6b7280 }
+          .printbtn { display:inline-block; margin-top:12px; padding:8px 14px; background:#2563eb; color:white; border-radius:6px; text-decoration:none }
+          @media print { .printbtn { display:none } }
+        </style>
+      </head>
+      <body>
+        <div class="sheet">
+          <div class="card">
+            <div class="header">
+              <div>
+                <div class="brand">${escapeHtml(chargement.societeP || (this.projetActif?.nom || ''))}</div>
+                <div style="font-size:13px; color:#374151">${escapeHtml(chargement.produit || '')}</div>
+              </div>
+              <div class="meta">
+                <div>Date: ${escapeHtml(dateStr)}</div>
+              </div>
+            </div>
+
+            <h1>ORDRE DE CHARGEMENT</h1>
+
+            <div class="grid">
+              <div>
+                <div class="field">
+                  <div class="label">Société Projet</div>
+                  <div class="value">${escapeHtml(chargement.societeP || '')}</div>
+                </div>
+                <div class="field" style="margin-top:8px">
+                  <div class="label">Produit</div>
+                  <div class="value">${escapeHtml(chargement.produit || '')}</div>
+                </div>
+                <div class="field" style="margin-top:8px">
+                  <div class="label">Navire </div>
+                  <div class="value">${escapeHtml(chargement.navire || '')}</div>
+                </div>
+                <div class="field" style="margin-top:8px">
+                  <div class="label">Port</div>
+                  <div class="value">${escapeHtml(chargement.port || '')}</div>
+                </div>
+              </div>
+              <div>
+                <div class="field">
+                  <div class="label">Transporteur</div>
+                  <div class="value">${escapeHtml(chargement.societe || '')}</div>
+                </div>
+                <div class="field" style="margin-top:8px">
+                  <div class="label">Matricule Camion</div>
+                  <div class="value">${escapeHtml(camStr)}</div>
+                </div>
+                <div class="field" style="margin-top:8px">
+                  <div class="label">Chauffeur</div>
+                  <div class="value">${escapeHtml(chauf.nom || '')}</div>
+                </div>
+                <div class="field" style="margin-top:8px">
+                  <div class="label">Cin</div>
+                  <div class="value">${escapeHtml(chauf.numCin || '')}</div>
+                </div>
+              </div>
+            </div>
+
+            
+
+            <div class="footer">
+              <div style="margin-top:8px;">Signature: ____________________________</div>
+            </div>
+
+            <a href="#" class="printbtn" onclick="window.print(); return false;">Imprimer</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Impossible d\'ouvrir la fenêtre d\'impression. Autorisez les popups.');
+      return;
+    }
+
+    w.document.write(html);
+    w.document.close();
+
+    // Laisser le temps au contenu de se charger puis ouvrir la boite d'impression
+    setTimeout(() => {
+      try {
+        w.focus();
+        w.print();
+      } catch (e) {
+        console.warn('printA4: impossible de lancer print automatiquement', e);
+      }
+    }, 500);
   }
 
   @HostListener('document:click', ['$event'])

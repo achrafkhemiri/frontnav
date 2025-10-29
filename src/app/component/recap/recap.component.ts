@@ -855,7 +855,7 @@ export class RecapComponent {
         // Section header for this ticket
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text(`code ticket d\'autorisation: ${code} — Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`, 14, currentY);
+        doc.text(`Autorisation: ${code} — Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`, 14, currentY);
         currentY += 6;
 
         // Table rows: use filteredVoyages but only voyages matching this code
@@ -984,7 +984,7 @@ export class RecapComponent {
         const quantiteAuth = Number(auth?.quantite || 0);
 
         // Section header for this ticket
-        statsData.push([`code ticket d\'autorisation: ${code}`, `Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`]);
+        statsData.push([`Autorisation: ${code}`, `Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`]);
         statsData.push(['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']);
 
         const rows = this.filteredVoyages.filter(v => {

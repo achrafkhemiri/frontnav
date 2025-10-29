@@ -1359,7 +1359,7 @@ export class ClientComponent {
     // Générer le tableau
     autoTable(doc, {
       startY: statsY + 10,
-      head: [['Nom', 'Numéro', 'Adresse', 'MF', 'code ticket d\'autorisation', 'Quantité Autorisée (kg)', 'Enlevé (kg)', 'Reste (kg)']],
+      head: [['Nom', 'Numéro', 'Adresse', 'MF', 'Autorisation', 'Quantité Autorisée (kg)', 'Quantité Vendue (kg)', 'Reste (kg)']],
       body: tableData,
       theme: 'grid',
       styles: {
@@ -1419,9 +1419,9 @@ export class ClientComponent {
             'Numéro': client.numero || '-',
             'Adresse': client.adresse || '-',
             'MF': client.mf || '-',
-            'code ticket d\'autorisation': code,
+            'Autorisation': code,
             'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(0),
-            'Enlevé (kg)': totalLivre.toFixed(2),
+            'Quantité Vendue (kg)': totalLivre.toFixed(2),
             'Reste (kg)': reste.toFixed(2)
           });
         });
@@ -1434,9 +1434,9 @@ export class ClientComponent {
           'Numéro': client.numero || '-',
           'Adresse': client.adresse || '-',
           'MF': client.mf || '-',
-          'code ticket d\'autorisation': '-',
+          'Autorisation': '-',
           'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(0),
-          'Enlevé (kg)': totalLivre.toFixed(2),
+          'Quantité Vendue (kg)': totalLivre.toFixed(2),
           'Reste (kg)': reste.toFixed(2)
         });
       }
