@@ -1435,7 +1435,7 @@ export class DechargementComponent implements OnInit {
     const resteAvantPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint, dech.id) : 0;
     const resteApresPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint) : 0;
 
-    // Structure identique à l'A4 mais réduite pour tenir A5 en paysage
+    // Structure identique à l'A4 mais optimisée pour A5 en paysage avec des polices plus grandes
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1444,23 +1444,23 @@ export class DechargementComponent implements OnInit {
         <title>Bon de Sortie A5 - ${escapeHtml(dech.numTicket || dech.numBonLivraison || dech.id)}</title>
         <style>
           /* Mode paysage A5 avec marges minimales */
-          @page { size: A5 landscape; margin: 3mm 3mm 3mm 3mm; }
+          @page { size: A5 landscape; margin: 4mm 4mm 4mm 4mm; }
           body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
-          .container { max-width: 210mm; margin: 0 auto; padding: 2mm; }
+          .container { max-width: 210mm; margin: 0 auto; padding: 3mm; }
 
           /* En-tête avec 3 colonnes: Nom société (gauche), Logo (centre), Description (droite) */
           .header { 
             display: grid; 
-            grid-template-columns: 1fr 1fr 1fr; 
-            gap: 8px; 
-            align-items: start; 
-            margin-bottom: 6px; 
-            border-bottom: 1px solid #333; 
-            padding-bottom: 6px; 
+            grid-template-columns: 1fr 1.2fr 1fr; 
+            gap: 12px; 
+            align-items: center; 
+            margin-bottom: 8px; 
+            border-bottom: 2px solid #333; 
+            padding-bottom: 8px; 
           }
           .header-left { 
-            font-size: 9px; 
-            line-height: 1.3; 
+            font-size: 11px; 
+            line-height: 1.4; 
             text-align: left;
           }
           .header-center { 
@@ -1469,40 +1469,41 @@ export class DechargementComponent implements OnInit {
             align-items: center;
           }
           .header-center img { 
-            max-width: 85px; 
-            max-height: 60px; 
+            max-width: 120px; 
+            max-height: 85px; 
             object-fit: contain;
             display: block;
             margin: 0 auto;
           }
           .header-right { 
-            font-size: 10px; 
-            line-height: 1.5; 
+            font-size: 13px; 
+            line-height: 1.6; 
             text-align: center;
             max-width: 100%;
             overflow-wrap: break-word;
             word-wrap: break-word;
             word-break: normal;
             white-space: normal;
-            padding-left: 4px;
+            padding-left: 6px;
             hyphens: auto;
             display: flex;
             justify-content: flex-end;
-            align-items: start;
+            align-items: center;
+            font-weight: 500;
           }
-          .company-name { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
-          .title-section { text-align: center; margin: 4px 0; }
-          .main-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
-          .bon-info { font-size: 10px; font-weight: 700; margin: 2px 0; }
-          .product-info { text-align: center; font-size: 9px; margin: 4px 0; line-height: 1.3; }
-          .vehicle-info { display: flex; justify-content: center; gap: 4cm; margin: 4px 0; font-size: 9px; }
-          .poids-table { width: 80%; margin: 4px auto; border-collapse: collapse; font-size: 10px; }
-          .poids-table th { background: #667eea; color: white; padding: 4px; text-align: center; font-weight: bold; border: 1px solid #333; }
-          .poids-table td { padding: 5px; text-align: center; font-weight: bold; border: 1px solid #333; font-size: 11px; }
-          .signatures { display:flex; justify-content:space-around; margin-top: 10px; }
-          .signature-block { width: 40%; text-align: center; font-size: 9px; }
-          .signature-line { border-top: 1.5px solid #333; margin-top: 18px; }
-          .print-button { display:block; width:160px; margin: 6px auto; padding: 5px 8px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:6px; text-decoration:none; text-align:center; font-size:11px; cursor:pointer; border:none; }
+          .company-name { font-size: 14px; font-weight: bold; margin-bottom: 3px; }
+          .title-section { text-align: center; margin: 6px 0; }
+          .main-title { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+          .bon-info { font-size: 13px; font-weight: 700; margin: 3px 0; }
+          .product-info { text-align: center; font-size: 13px; margin: 8px 0; line-height: 1.7; }
+          .vehicle-info { display: flex; justify-content: center; gap: 4cm; margin: 8px 0; font-size: 13px; line-height: 1.6; }
+          .poids-table { width: 85%; margin: 8px auto; border-collapse: collapse; font-size: 14px; }
+          .poids-table th { background: #667eea; color: white; padding: 8px; text-align: center; font-weight: bold; border: 1.5px solid #333; font-size: 15px; }
+          .poids-table td { padding: 10px; text-align: center; font-weight: bold; border: 1.5px solid #333; font-size: 16px; }
+          .signatures { display:flex; justify-content:space-around; margin-top: 16px; }
+          .signature-block { width: 40%; text-align: center; font-size: 13px; }
+          .signature-line { border-top: 2px solid #333; margin-top: 28px; }
+          .print-button { display:block; width:180px; margin: 8px auto; padding: 7px 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:8px; text-decoration:none; text-align:center; font-size:13px; cursor:pointer; border:none; font-weight: 600; }
           @media print { .print-button { display:none } }
         </style>
       </head>
@@ -1518,52 +1519,52 @@ export class DechargementComponent implements OnInit {
               ${societeInfo?.logo ? `<img src="${escapeHtml(societeInfo.logo)}" alt="Logo">` : ''}
             </div>
             <div class="header-right">
-              ${formattedDescription ? `<div style="font-size:10px; line-height:1.4; text-align:center; overflow-wrap:break-word; word-wrap:break-word; word-break:normal; white-space:normal; max-width:100%; hyphens:auto; display:block; direction:rtl; unicode-bidi:embed;">${formattedDescription}</div>` : ''}
+              ${formattedDescription ? `<div style="font-size:13px; line-height:1.6; text-align:center; overflow-wrap:break-word; word-wrap:break-word; word-break:normal; white-space:normal; max-width:100%; hyphens:auto; display:block; direction:rtl; unicode-bidi:embed; font-weight:500;">${formattedDescription}</div>` : ''}
             </div>
           </div>
           ` : ''}
 
           <!-- Bloc avec 3 colonnes: Société (gauche), BON DE LIVRAISON (centre), Client/Dépôt (droite) -->
-          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; align-items:start; margin-bottom:6px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; align-items:start; margin-bottom:10px;">
             <!-- Informations société à gauche -->
-            <div style="font-size:9px; line-height:1.3; text-align:left;">
-              <div style="font-size:11px; font-weight:bold; margin-bottom:2px;">${escapeHtml(societeInfo?.nom || (chargement?.societeP || 'Société'))}</div>
-              ${societeInfo?.adresse ? `<div style="font-size:8px">Adresse: ${escapeHtml(societeInfo.adresse)}</div>` : ''}
-              ${societeInfo?.rcs ? `<div style="font-size:8px">N° RCS: ${escapeHtml(societeInfo.rcs)}</div>` : ''}
-              ${societeInfo?.tva ? `<div style="font-size:8px">N° TVA: ${escapeHtml(societeInfo.tva)}</div>` : ''}
-              <div style="font-size:8px">${escapeHtml(contactText)}</div>
+            <div style="font-size:12px; line-height:1.6; text-align:left;">
+              <div style="font-size:14px; font-weight:bold; margin-bottom:4px;">${escapeHtml(societeInfo?.nom || (chargement?.societeP || 'Société'))}</div>
+              ${societeInfo?.adresse ? `<div style="font-size:11px; margin-bottom:2px;">Adresse: ${escapeHtml(societeInfo.adresse)}</div>` : ''}
+              ${societeInfo?.rcs ? `<div style="font-size:11px; margin-bottom:2px;">N° RCS: ${escapeHtml(societeInfo.rcs)}</div>` : ''}
+              ${societeInfo?.tva ? `<div style="font-size:11px; margin-bottom:2px;">N° TVA: ${escapeHtml(societeInfo.tva)}</div>` : ''}
+              <div style="font-size:11px">${escapeHtml(contactText)}</div>
             </div>
 
             <!-- BON DE LIVRAISON au centre -->
             <div style="text-align:center;">
-              <div style="font-size:13px; font-weight:700; margin-bottom:3px;">BON DE LIVRAISON</div>
-              <div style="font-size:10px; font-weight:700; margin:2px 0;">N° Bon: ${escapeHtml(dech.numBonLivraison || 'N/A')}</div>
-              <div style="font-size:10px; font-weight:700; margin:2px 0;">N° Ticket: ${escapeHtml(dech.numTicket || 'N/A')}</div>
+              <div style="font-size:18px; font-weight:700; margin-bottom:5px;">BON DE LIVRAISON</div>
+              <div style="font-size:14px; font-weight:700; margin:4px 0;">N° Bon: ${escapeHtml(dech.numBonLivraison || 'N/A')}</div>
+              <div style="font-size:14px; font-weight:700; margin:4px 0;">N° Ticket: ${escapeHtml(dech.numTicket || 'N/A')}</div>
             </div>
 
             <!-- Informations client/dépôt à droite -->
-            <div style="text-align:right; font-size:8px;">
-              <div style="font-weight:600;">${escapeHtml(depot?.nom || client?.nom || '')}</div>
-              ${depot?.adresse || client?.adresse ? `<div style="font-size:8px">Adresse: ${escapeHtml(depot?.adresse || client?.adresse || '')}</div>` : ''}
-              ${(depot?.mf || client?.mf) ? `<div style="font-size:8px">MF: ${escapeHtml(depot?.mf || client?.mf || '')}</div>` : ''}
+            <div style="text-align:right; font-size:11px; line-height:1.6;">
+              <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${escapeHtml(depot?.nom || client?.nom || '')}</div>
+              ${depot?.adresse || client?.adresse ? `<div style="font-size:11px; margin-bottom:2px;">Adresse: ${escapeHtml(depot?.adresse || client?.adresse || '')}</div>` : ''}
+              ${(depot?.mf || client?.mf) ? `<div style="font-size:11px">MF: ${escapeHtml(depot?.mf || client?.mf || '')}</div>` : ''}
             </div>
           </div>
 
           <!-- print button moved to bottom to avoid pushing content down -->
 
           <div class="product-info">
-            <div><strong>Produit:</strong> ${escapeHtml(dech.produit || 'N/A')} &nbsp; <strong>Navire:</strong> ${escapeHtml(dech.navire || 'N/A')} &nbsp; <strong>Port:</strong> ${escapeHtml(dech.port || 'N/A')}</div>
-            <div style="margin-top:6px"><strong>Date:</strong> ${escapeHtml(dateFormatted)} &nbsp;&nbsp; <strong>Heure:</strong> ${escapeHtml(heureDepart)}</div>
+            <div style="font-size:14px;"><strong>Produit:</strong> ${escapeHtml(dech.produit || 'N/A')} &nbsp; <strong>Navire:</strong> ${escapeHtml(dech.navire || 'N/A')} &nbsp; <strong>Port:</strong> ${escapeHtml(dech.port || 'N/A')}</div>
+            <div style="margin-top:8px; font-size:14px;"><strong>Date:</strong> ${escapeHtml(dateFormatted)} &nbsp;&nbsp; <strong>Heure:</strong> ${escapeHtml(heureDepart)}</div>
           </div>
 
           <div class="vehicle-info">
             <div style="text-align:center">
-              <div style="font-weight:600">VEHICULE: ${escapeHtml(camion?.matricule || 'N/A')}</div>
-              <div style="font-size:10px">Chauffeur: ${escapeHtml(chauffeur?.nom || 'N/A')}</div>
+              <div style="font-weight:700; font-size:14px;">VEHICULE: ${escapeHtml(camion?.matricule || 'N/A')}</div>
+              <div style="font-size:13px">Chauffeur: ${escapeHtml(chauffeur?.nom || 'N/A')}</div>
             </div>
             <div style="text-align:center">
-              <div style="font-weight:600">Transporteur: ${escapeHtml(camion?.societe || dech.societe || 'N/A')}</div>
-              <div style="font-size:10px">CIN: ${escapeHtml(chauffeur?.numCin || 'N/A')}</div>
+              <div style="font-weight:700; font-size:14px;">Transporteur: ${escapeHtml(camion?.societe || dech.societe || 'N/A')}</div>
+              <div style="font-size:13px">CIN: ${escapeHtml(chauffeur?.numCin || 'N/A')}</div>
             </div>
           </div>
 
@@ -1586,17 +1587,17 @@ export class DechargementComponent implements OnInit {
 
           <div class="signatures">
             <div class="signature-block">
-              <div class="signature-label">Signature Agent Port</div>
+              <div class="signature-label" style="font-size:14px; font-weight:600;">Signature Agent Port</div>
               <div class="signature-line"></div>
             </div>
             <div class="signature-block">
-              <div class="signature-label">Signature Chauffeur</div>
+              <div class="signature-label" style="font-size:14px; font-weight:600;">Signature Chauffeur</div>
               <div class="signature-line"></div>
             </div>
           </div>
 
           <!-- print button placed at the bottom so it doesn't create top whitespace -->
-          <div style="text-align:center; margin-top:8px;">
+          <div style="text-align:center; margin-top:10px;">
             <button class="print-button" onclick="window.print()">🖨️ Imprimer le bon</button>
           </div>
 

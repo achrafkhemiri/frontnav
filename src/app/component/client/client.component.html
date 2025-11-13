@@ -606,5 +606,47 @@
 							</div>
 						</div>
 					</div>
+
+					<!-- Modal de confirmation de suppression -->
+					<div class="dialog-backdrop" *ngIf="showConfirmModal" (click)="cancelDelete()">
+						<div class="confirm-modal" (click)="$event.stopPropagation()">
+							<div class="modal-header-confirm">
+								<i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+								<h3>{{ modalTitle }}</h3>
+							</div>
+							<div class="modal-body-confirm">
+								<p>{{ modalMessage }}</p>
+							</div>
+							<div class="modal-actions-confirm">
+								<button class="btn-cancel" (click)="cancelDelete()">
+									<i class="bi bi-x-lg"></i>
+									Annuler
+								</button>
+								<button class="btn-confirm-delete" (click)="confirmDelete()">
+									<i class="bi bi-trash-fill"></i>
+									Supprimer
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Modal d'erreur -->
+					<div class="dialog-backdrop" *ngIf="showErrorModal" (click)="closeErrorModal()">
+						<div class="error-modal" (click)="$event.stopPropagation()">
+							<div class="modal-header-error">
+								<i class="bi" [ngClass]="modalIcon" [style.color]="modalIconColor"></i>
+								<h3>{{ modalTitle }}</h3>
+							</div>
+							<div class="modal-body-error">
+								<p>{{ modalMessage }}</p>
+							</div>
+							<div class="modal-actions-error">
+								<button class="btn-close-error" (click)="closeErrorModal()">
+									<i class="bi bi-check-lg"></i>
+									Fermer
+								</button>
+							</div>
+						</div>
+					</div>
 	</main>
 </div>

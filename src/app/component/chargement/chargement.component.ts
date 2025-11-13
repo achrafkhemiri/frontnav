@@ -146,6 +146,10 @@ export class ChargementComponent {
   showDepassementModal: boolean = false;
   depassementQuantite: number = 0;
 
+  // Modal de confirmation après création de déchargement
+  showPrintConfirmModal: boolean = false;
+  createdDechargement: any = null; // Stocker le déchargement créé pour l'impression
+
   // Dernier numéro de bon de livraison utilisé (pour auto-incrément)
   lastNumBonLivraison: number | null = null;
   
@@ -236,6 +240,7 @@ export class ChargementComponent {
     this.loadChauffeurs();
     this.loadCamions();
     this.loadClientsAndDepots();
+    this.loadDechargements(); // 🔥 Charger les déchargements dès l'initialisation
   }
 
   ngOnInit() {
@@ -274,6 +279,7 @@ export class ChargementComponent {
     this.loadChauffeurs();
     this.loadCamions();
     this.loadClientsAndDepots();
+    this.loadDechargements(); // 🔥 Charger les déchargements proactivement
     this.updateBreadcrumb();
   }
 
@@ -482,9 +488,13 @@ export class ChargementComponent {
     }
   }
 
-  openDechargementForm(chargement: ChargementDTO) {
+  async openDechargementForm(chargement: ChargementDTO) {
     this.selectedChargementForDechargement = chargement;
     this.editingDechargement = false; // Mode création
+    
+    // 🔥 Charger les déchargements en premier et attendre la fin du chargement
+    await this.loadDechargements();
+    
     this.dialogDechargement = {
       id: undefined,
       chargementId: chargement.id,
@@ -502,8 +512,7 @@ export class ChargementComponent {
       _originalDepotId: undefined
     };
     
-    // Pré-remplir le numéro de bon de livraison SEULEMENT si le projet a déjà des déchargements
-    // Sinon, laisser vide pour que l'utilisateur puisse saisir le premier numéro
+    // 🔥 Auto-génération du numéro de bon de livraison si le projet a déjà des déchargements
     if (this.hasExistingDechargements) {
       try {
         // Essayer plusieurs clés: contexte, projet actif, puis global
@@ -529,41 +538,6 @@ export class ChargementComponent {
       } catch (e) {
         console.warn('Impossible de pré-remplir numBonLivraison:', e);
       }
-
-      // Si à ce stade rien n'a été assigné (parce que les IDs de projet ne sont pas encore initialisés),
-      // tenter de réessayer une ou deux fois après un petit délai utile pour l'initialisation asynchrone.
-      try {
-        if (!this.dialogDechargement.numBonLivraison || String(this.dialogDechargement.numBonLivraison).trim() === '') {
-          let attempts = 0;
-          const maxAttempts = 3;
-          const retry = () => {
-            attempts++;
-            const candidates: Array<number | string | null> = [this.contextProjetId, this.projetActifId, 'global'];
-            for (const cand of candidates) {
-              const next = this.computeNextNumBonLivraison(cand ?? 'global');
-              if (next != null) {
-                this.dialogDechargement.numBonLivraison = String(next);
-                console.log('✅ Auto-incrémentation numBonLivraison (retry) =', next, 'using key', cand ?? 'global');
-                return;
-              }
-            }
-            const fallback = this.computeNextFromAnyStored();
-            if (fallback != null) {
-              this.dialogDechargement.numBonLivraison = String(fallback);
-              console.log('✅ Auto-incrémentation numBonLivraison (retry fallback) =', fallback);
-              return;
-            }
-            if (attempts < maxAttempts) {
-              setTimeout(retry, 150);
-            }
-          };
-          // lancer la première tentative après 120ms
-          setTimeout(retry, 120);
-        }
-      } catch (e) {
-        // ne pas bloquer l'ouverture du dialog si l'essai échoue
-        console.warn('Erreur pendant retry pré-remplissage BL:', e);
-      }
     } else {
       console.log('ℹ️ Premier déchargement du projet - L\'utilisateur peut saisir le numéro initial');
     }
@@ -572,7 +546,6 @@ export class ChargementComponent {
     this.depotSearchInput = '';
     this.showDechargementDialog = true;
     this.loadClientsAndDepots();
-    this.loadDechargements();
 
     // Reset validation state
     this.weightsAreIntegers = true;
@@ -580,9 +553,12 @@ export class ChargementComponent {
   }
 
   // 🆕 Fonction pour éditer un déchargement existant
-  editDechargement(dechargement: any, chargement: ChargementDTO) {
+  async editDechargement(dechargement: any, chargement: ChargementDTO) {
     this.selectedChargementForDechargement = chargement;
     this.editingDechargement = true; // Mode édition
+    
+    // 🔥 Charger les déchargements en premier et attendre la fin du chargement
+    await this.loadDechargements();
     
     // Déterminer le type et les valeurs initiales
     const hasClient = dechargement.clientId !== undefined && dechargement.clientId !== null;
@@ -616,7 +592,6 @@ export class ChargementComponent {
     
     this.showDechargementDialog = true;
     this.loadClientsAndDepots();
-    this.loadDechargements();
 
     // Reset validation state
     this.weightsAreIntegers = true;
@@ -781,26 +756,37 @@ export class ChargementComponent {
     return reste < 0;
   }
 
-  loadDechargements() {
+  loadDechargements(): Promise<void> {
     const projetId = this.contextProjetId || this.projetActifId;
-    if (!projetId) return;
+    if (!projetId) {
+      return Promise.resolve();
+    }
 
-    this.dechargementService.getAllDechargements().subscribe({
-      next: async (data: any) => {
-        let allDechargements: any[] = [];
-        if (data instanceof Blob) {
-          const text = await data.text();
-          allDechargements = JSON.parse(text);
-        } else {
-          allDechargements = data;
+    return new Promise((resolve) => {
+      this.dechargementService.getAllDechargements().subscribe({
+        next: async (data: any) => {
+          let allDechargements: any[] = [];
+          if (data instanceof Blob) {
+            const text = await data.text();
+            allDechargements = JSON.parse(text);
+          } else {
+            allDechargements = data;
+          }
+          // Filtrer les déchargements du projet actuel
+          this.dechargements = allDechargements.filter(d => d.projetId === projetId);
+          // Vérifier si le projet a déjà des déchargements
+          this.hasExistingDechargements = this.dechargements.length > 0;
+          console.log('✅ Déchargements chargés:', this.dechargements.length, '- Has existing:', this.hasExistingDechargements);
+          
+          // 🔥 Forcer la détection de changements pour mettre à jour l'UI immédiatement
+          this.cdr.detectChanges();
+          resolve();
+        },
+        error: (err) => {
+          console.error('❌ Erreur chargement déchargements:', err);
+          resolve(); // Résoudre quand même pour ne pas bloquer
         }
-        // Filtrer les déchargements du projet actuel
-        this.dechargements = allDechargements.filter(d => d.projetId === projetId);
-        // Vérifier si le projet a déjà des déchargements
-        this.hasExistingDechargements = this.dechargements.length > 0;
-        console.log('✅ Déchargements chargés:', this.dechargements.length, '- Has existing:', this.hasExistingDechargements);
-      },
-      error: (err) => console.error('❌ Erreur chargement déchargements:', err)
+      });
     });
   }
 
@@ -1307,16 +1293,28 @@ export class ChargementComponent {
 
   // Fermer le dialog après succès
   private closeDechargementSuccess() {
-    this.showDechargementDialog = false;
-    this.editingDechargement = false;
-    this.error = '';
-    this.loadChargements(); // Recharger pour mettre à jour l'affichage
-    this.loadDechargements(); // Recharger les déchargements
-    // Informer les autres composants (client) de se rafraîchir
-    try {
-      this.notificationService.rafraichir();
-    } catch (e) {
-      console.warn("⚠️ Impossible d'émettre rafraichissement notification:", e);
+    // 🔥 Au lieu de fermer directement, ouvrir la modale de confirmation d'impression
+    // mais seulement en mode création, pas en édition
+    if (!this.editingDechargement) {
+      // Stocker les informations du déchargement créé pour l'impression
+      this.createdDechargement = {
+        ...this.dialogDechargement,
+        chargement: this.selectedChargementForDechargement
+      };
+      this.showDechargementDialog = false;
+      this.showPrintConfirmModal = true;
+    } else {
+      // En mode édition, fermer normalement
+      this.showDechargementDialog = false;
+      this.editingDechargement = false;
+      this.error = '';
+      this.loadChargements();
+      this.loadDechargements();
+      try {
+        this.notificationService.rafraichir();
+      } catch (e) {
+        console.warn("⚠️ Impossible d'émettre rafraichissement notification:", e);
+      }
     }
   }
 
@@ -2496,6 +2494,247 @@ export class ChargementComponent {
         console.warn('printA4: impossible de lancer print automatiquement', e);
       }
     }, 500);
+  }
+
+  // 🔥 Fermer la modale de confirmation d'impression sans imprimer
+  closePrintConfirmModal() {
+    this.showPrintConfirmModal = false;
+    this.createdDechargement = null;
+    this.editingDechargement = false;
+    this.error = '';
+    this.loadChargements();
+    this.loadDechargements();
+    try {
+      this.notificationService.rafraichir();
+    } catch (e) {
+      console.warn("⚠️ Impossible d'émettre rafraichissement notification:", e);
+    }
+  }
+
+  // 🔥 Imprimer le bon de chargement A5 et fermer
+  printCreatedDechargement() {
+    if (!this.createdDechargement) return;
+    
+    // Construire l'objet déchargement pour l'impression
+    const dech: any = {
+      id: this.createdDechargement.id,
+      chargementId: this.createdDechargement.chargementId,
+      numTicket: this.createdDechargement.numTicket,
+      numBonLivraison: this.createdDechargement.numBonLivraison,
+      poidCamionVide: this.createdDechargement.poidCamionVide,
+      poidComplet: this.createdDechargement.poidComplet,
+      clientId: this.createdDechargement.clientId,
+      depotId: this.createdDechargement.depotId,
+      dateDechargement: this.createdDechargement.dateDechargement || new Date().toISOString(),
+      societe: this.createdDechargement.chargement?.societe,
+      societeP: this.createdDechargement.societeP,
+      produit: this.createdDechargement.chargement?.produit,
+      navire: this.createdDechargement.chargement?.navire,
+      port: this.createdDechargement.chargement?.port,
+      autorisationCode: this.createdDechargement.autorisationCode
+    };
+    
+    this.printA5Dechargement(dech);
+    this.closePrintConfirmModal();
+  }
+
+  // 🔥 Impression A5 du bon de chargement (copié depuis dechargement.component.ts)
+  printA5Dechargement(dech: any): void {
+    const chargement = this.chargements.find(c => c.id === dech.chargementId) || this.createdDechargement?.chargement;
+    const camion = chargement ? this.camions.find(c => c.id === chargement.camionId) : null;
+    const chauffeur = chargement ? this.chauffeurs.find(c => c.id === chargement.chauffeurId) : null;
+    const client = dech.clientId ? this.clients.find(c => c.id === dech.clientId) : null;
+    const depot = dech.depotId ? this.depots.find(d => d.id === dech.depotId) : null;
+
+    // Récupérer la société (si disponible dans le projet)
+    let societeInfo: any = null;
+    if (this.projetActif && Array.isArray((this.projetActif as any).societes)) {
+      if (chargement?.societeP) {
+        societeInfo = (this.projetActif as any).societes.find((s: any) => s.nom === chargement.societeP) || null;
+      }
+      if (!societeInfo && (this.projetActif as any).societes.length > 0) {
+        societeInfo = (this.projetActif as any).societes[0];
+      }
+    }
+
+    const dateDechargement = dech.dateDechargement ? new Date(dech.dateDechargement) : new Date();
+    const dateFormatted = dateDechargement.toLocaleDateString('fr-FR');
+    const heureDepart = dateDechargement.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    const poidsNet = (dech.poidComplet || 0) - (dech.poidCamionVide || 0);
+
+    const escapeHtml = (s: any) => {
+      if (s === null || s === undefined) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    };
+
+    // Formatter la description
+    let formattedDescription = '';
+    if (societeInfo?.description) {
+      const rawDesc = String(societeInfo.description).trim();
+      const parts = rawDesc.split('|').map(p => p.trim()).filter(p => p.length > 0);
+      const wrapLimit = 35;
+      const wrappedParts: string[] = [];
+      parts.forEach(p => {
+        if (p.length <= wrapLimit) {
+          wrappedParts.push(p);
+        } else {
+          const words = p.split(/\s+/);
+          let line = '';
+          for (const w of words) {
+            if ((line + ' ' + w).trim().length <= wrapLimit) {
+              line = (line + ' ' + w).trim();
+            } else {
+              if (line) wrappedParts.push(line);
+              line = w;
+            }
+          }
+          if (line) wrappedParts.push(line);
+        }
+      });
+      formattedDescription = wrappedParts.map(l => escapeHtml(l)).join('<br>');
+    }
+
+    // Préparer le contact
+    let contactText = '';
+    const rawContact = societeInfo?.contact;
+    if (rawContact) {
+      try {
+        const parsed = typeof rawContact === 'string' ? JSON.parse(rawContact) : rawContact;
+        if (Array.isArray(parsed)) {
+          contactText = parsed.map(c => `Tel: ${String(c)}`).join(', ');
+        } else if (typeof parsed === 'object') {
+          contactText = Object.values(parsed).map(v => String(v)).join(', ');
+        } else {
+          contactText = `Contact: ${String(parsed)}`;
+        }
+      } catch {
+        contactText = `Contact: ${String(rawContact)}`;
+      }
+    } else {
+      contactText = 'Tel: 71 430 822';
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Bon de Sortie A5 - ${escapeHtml(dech.numTicket || dech.numBonLivraison || dech.id)}</title>
+        <style>
+          @page { size: A5 landscape; margin: 4mm 4mm 4mm 4mm; }
+          body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+          .container { max-width: 210mm; margin: 0 auto; padding: 3mm; }
+          .header { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 12px; align-items: center; margin-bottom: 8px; border-bottom: 2px solid #333; padding-bottom: 8px; }
+          .header-left { font-size: 11px; line-height: 1.4; text-align: left; }
+          .header-center { display: flex; justify-content: center; align-items: center; }
+          .header-center img { max-width: 120px; max-height: 85px; object-fit: contain; display: block; margin: 0 auto; }
+          .header-right { font-size: 13px; line-height: 1.6; text-align: center; max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; word-break: normal; white-space: normal; padding-left: 6px; hyphens: auto; display: flex; justify-content: flex-end; align-items: center; font-weight: 500; }
+          .product-info { text-align: center; font-size: 13px; margin: 8px 0; line-height: 1.7; }
+          .vehicle-info { display: flex; justify-content: center; gap: 4cm; margin: 8px 0; font-size: 13px; line-height: 1.6; }
+          .poids-table { width: 85%; margin: 8px auto; border-collapse: collapse; font-size: 14px; }
+          .poids-table th { background: #667eea; color: white; padding: 8px; text-align: center; font-weight: bold; border: 1.5px solid #333; font-size: 15px; }
+          .poids-table td { padding: 10px; text-align: center; font-weight: bold; border: 1.5px solid #333; font-size: 16px; }
+          .signatures { display:flex; justify-content:space-around; margin-top: 16px; }
+          .signature-block { width: 40%; text-align: center; font-size: 13px; }
+          .signature-line { border-top: 2px solid #333; margin-top: 28px; }
+          .print-button { display:block; width:180px; margin: 8px auto; padding: 7px 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:8px; text-decoration:none; text-align:center; font-size:13px; cursor:pointer; border:none; font-weight: 600; }
+          @media print { .print-button { display:none } }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          ${(societeInfo?.logo || formattedDescription) ? `
+          <div class="header">
+            <div class="header-left"></div>
+            <div class="header-center">
+              ${societeInfo?.logo ? `<img src="${escapeHtml(societeInfo.logo)}" alt="Logo">` : ''}
+            </div>
+            <div class="header-right">
+              ${formattedDescription ? `<div style="font-size:13px; line-height:1.6; text-align:center; overflow-wrap:break-word; word-wrap:break-word; word-break:normal; white-space:normal; max-width:100%; hyphens:auto; display:block; direction:rtl; unicode-bidi:embed; font-weight:500;">${formattedDescription}</div>` : ''}
+            </div>
+          </div>
+          ` : ''}
+
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; align-items:start; margin-bottom:10px;">
+            <div style="font-size:12px; line-height:1.6; text-align:left;">
+              <div style="font-size:14px; font-weight:bold; margin-bottom:4px;">${escapeHtml(societeInfo?.nom || (chargement?.societeP || 'Société'))}</div>
+              ${societeInfo?.adresse ? `<div style="font-size:11px; margin-bottom:2px;">Adresse: ${escapeHtml(societeInfo.adresse)}</div>` : ''}
+              ${societeInfo?.rcs ? `<div style="font-size:11px; margin-bottom:2px;">N° RCS: ${escapeHtml(societeInfo.rcs)}</div>` : ''}
+              ${societeInfo?.tva ? `<div style="font-size:11px; margin-bottom:2px;">N° TVA: ${escapeHtml(societeInfo.tva)}</div>` : ''}
+              <div style="font-size:11px">${escapeHtml(contactText)}</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-size:18px; font-weight:700; margin-bottom:5px;">BON DE LIVRAISON</div>
+              <div style="font-size:14px; font-weight:700; margin:4px 0;">N° Bon: ${escapeHtml(dech.numBonLivraison || 'N/A')}</div>
+              <div style="font-size:14px; font-weight:700; margin:4px 0;">N° Ticket: ${escapeHtml(dech.numTicket || 'N/A')}</div>
+            </div>
+            <div style="text-align:right; font-size:11px; line-height:1.6;">
+              <div style="font-weight:700; font-size:14px; margin-bottom:4px;">${escapeHtml(depot?.nom || client?.nom || '')}</div>
+              ${depot?.adresse || client?.adresse ? `<div style="font-size:11px; margin-bottom:2px;">Adresse: ${escapeHtml(depot?.adresse || client?.adresse || '')}</div>` : ''}
+              ${(depot?.mf || client?.mf) ? `<div style="font-size:11px">MF: ${escapeHtml(depot?.mf || client?.mf || '')}</div>` : ''}
+            </div>
+          </div>
+
+          <div class="product-info">
+            <div style="font-size:14px;"><strong>Produit:</strong> ${escapeHtml(dech.produit || 'N/A')} &nbsp; <strong>Navire:</strong> ${escapeHtml(dech.navire || 'N/A')} &nbsp; <strong>Port:</strong> ${escapeHtml(dech.port || 'N/A')}</div>
+            <div style="margin-top:8px; font-size:14px;"><strong>Date:</strong> ${escapeHtml(dateFormatted)} &nbsp;&nbsp; <strong>Heure:</strong> ${escapeHtml(heureDepart)}</div>
+          </div>
+
+          <div class="vehicle-info">
+            <div style="text-align:center">
+              <div style="font-weight:700; font-size:14px;">VEHICULE: ${escapeHtml(camion?.matricule || 'N/A')}</div>
+              <div style="font-size:13px">Chauffeur: ${escapeHtml(chauffeur?.nom || 'N/A')}</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-weight:700; font-size:14px;">Transporteur: ${escapeHtml(camion?.societe || dech.societe || 'N/A')}</div>
+              <div style="font-size:13px">CIN: ${escapeHtml(chauffeur?.numCin || 'N/A')}</div>
+            </div>
+          </div>
+
+          <table class="poids-table">
+            <thead>
+              <tr>
+                <th>Poids Brut</th>
+                <th>Poids Tare</th>
+                <th>Poids Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${Math.round(dech.poidComplet || 0)}</td>
+                <td>${Math.round(dech.poidCamionVide || 0)}</td>
+                <td>${Math.round(poidsNet)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="signatures">
+            <div class="signature-block">
+              <div class="signature-label" style="font-size:14px; font-weight:600;">Signature Agent Port</div>
+              <div class="signature-line"></div>
+            </div>
+            <div class="signature-block">
+              <div class="signature-label" style="font-size:14px; font-weight:600;">Signature Chauffeur</div>
+              <div class="signature-line"></div>
+            </div>
+          </div>
+
+          <div style="text-align:center; margin-top:10px;">
+            <button class="print-button" onclick="window.print()">🖨️ Imprimer le bon</button>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const w = window.open('', '_blank', 'width=700,height=800');
+    if (!w) { alert('Impossible d\'ouvrir la fenêtre d\'impression. Autorisez les popups.'); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => {
+      try { w.focus(); w.print(); } catch (e) { console.warn('printA5Dechargement: print failed', e); }
+    }, 600);
   }
 
   @HostListener('document:click', ['$event'])

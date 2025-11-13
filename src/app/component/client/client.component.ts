@@ -113,6 +113,15 @@ export class ClientComponent {
   // Date max pour le filtre (aujourd'hui)
   today: string = '';
   
+  // Modal de confirmation/erreur
+  showConfirmModal: boolean = false;
+  showErrorModal: boolean = false;
+  modalTitle: string = '';
+  modalMessage: string = '';
+  modalIcon: string = '';
+  modalIconColor: string = '';
+  clientToDelete: number | null = null;
+  
   // Expose Math to template
   Math = Math;
 
@@ -913,18 +922,94 @@ export class ClientComponent {
   deleteClient(id?: number) {
     if (id === undefined) return;
 
+    // Vérifier si le client a une quantité vendue > 0
+    const quantite = this.getTotalLivreClient(id);
+    if (quantite > 0) {
+      this.showErrorModal = true;
+      this.modalTitle = 'Suppression impossible';
+      this.modalMessage = `Ce client a une quantité vendue de ${quantite.toFixed(0)} kg. Vous ne pouvez pas supprimer un client ayant des ventes enregistrées.`;
+      this.modalIcon = 'bi-exclamation-triangle-fill';
+      this.modalIconColor = '#ef4444';
+      return;
+    }
+
+    // Ouvrir d'abord la boîte de dialogue de code de suppression
     const dialogRef = this.dialog.open(ConfirmCodeDialogComponent, { disableClose: true });
     dialogRef.afterClosed().subscribe((ok: boolean) => {
       if (ok === true) {
-        this.clientService.deleteClient(id, 'body').subscribe({
-          next: () => {
-            this.loadClients();
-            this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
-          },
-          error: (err) => this.error = 'Erreur suppression: ' + (err.error?.message || err.message)
-        });
+        // Afficher la modale de confirmation existante
+        this.clientToDelete = id;
+        this.showConfirmModal = true;
+        this.modalTitle = 'Confirmer la suppression';
+        this.modalMessage = 'Êtes-vous sûr de vouloir supprimer ce client ? Cette action est irréversible.';
+        this.modalIcon = 'bi-trash-fill';
+        this.modalIconColor = '#ef4444';
       }
     });
+  }
+
+  confirmDelete() {
+    if (this.clientToDelete === null) return;
+    
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    if (!targetProjetId) {
+      this.showConfirmModal = false;
+      this.showErrorModal = true;
+      this.modalTitle = 'Erreur';
+      this.modalMessage = 'Aucun projet actif';
+      this.modalIcon = 'bi-x-circle-fill';
+      this.modalIconColor = '#ef4444';
+      return;
+    }
+    
+    // Utiliser clientService.deleteClient qui utilise la bonne méthode backend
+    this.clientService.deleteClient(this.clientToDelete, 'body').subscribe({
+      next: () => {
+        // console.log('✅ Client supprimé avec succès');
+        this.showConfirmModal = false;
+        this.clientToDelete = null;
+        this.loadClients();
+        this.loadVoyages(); // Recharger les voyages pour mettre à jour le reste
+      },
+      error: (err) => {
+        console.error('❌ Erreur suppression client:', err);
+        this.showConfirmModal = false;
+        this.showErrorModal = true;
+        this.modalTitle = 'Erreur de suppression';
+        
+        // Message d'erreur plus explicite
+        let errorMessage = 'Une erreur est survenue lors de la suppression';
+        
+        if (err.status === 403) {
+          errorMessage = 'Vous n\'avez pas les permissions nécessaires pour supprimer ce client.';
+        } else if (err.error?.message) {
+          errorMessage = err.error.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+        
+        // Détecter les erreurs de contrainte de clé étrangère
+        const errorText = JSON.stringify(err);
+        if (errorText.includes('foreign key') || errorText.includes('constraint') || errorText.includes('DataIntegrityViolationException')) {
+          errorMessage = 'Ce client est encore associé à un ou plusieurs projets. Il ne peut pas être supprimé tant qu\'il y a des associations actives.';
+        }
+        
+        this.modalMessage = errorMessage;
+        this.modalIcon = 'bi-x-circle-fill';
+        this.modalIconColor = '#ef4444';
+      }
+    });
+  }
+
+  cancelDelete() {
+    this.showConfirmModal = false;
+    this.clientToDelete = null;
+  }
+
+  closeErrorModal() {
+    this.showErrorModal = false;
+    this.modalTitle = '';
+    this.modalMessage = '';
   }
 
   cancelEdit() {
