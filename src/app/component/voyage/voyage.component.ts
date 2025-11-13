@@ -22,6 +22,8 @@ import { HttpClient } from '@angular/common/http';
 import { BASE_PATH } from '../../api/variables';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { TypeNotification, NiveauAlerte } from '../../model/notification.model';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmCodeDialogComponent } from '../../shared/confirm-code-dialog.component';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -141,6 +143,7 @@ export class VoyageComponent {
     private notificationService: NotificationService,
     private http: HttpClient,
     private route: ActivatedRoute,
+    private dialog: MatDialog,
     @Inject(BASE_PATH) private basePath: string
   ) {
     // 🔥 Écouter les changements du projet actif
@@ -2144,8 +2147,17 @@ export class VoyageComponent {
   }
 
   openDeleteDialog(voyage: VoyageDTO): void {
-    this.voyageToDelete = voyage;
-    this.showDeleteDialog = true;
+    // First require the deletion code
+    const dialogRef = this.dialog.open(ConfirmCodeDialogComponent, { disableClose: true });
+    dialogRef.afterClosed().subscribe((ok: boolean) => {
+      if (ok === true) {
+        // Ajouter un délai pour laisser le backdrop Material Dialog disparaître complètement
+        setTimeout(() => {
+          this.voyageToDelete = voyage;
+          this.showDeleteDialog = true;
+        }, 100);
+      }
+    });
   }
 
   closeDeleteDialog(): void {

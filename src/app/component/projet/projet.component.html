@@ -177,7 +177,19 @@
 									</h4>
 									<div class="societes-mini-cards">
 										<div class="societe-mini-card" *ngFor="let s of pr.societes">
-											<div class="mini-card-title"><i class="bi bi-building"></i> {{ s.nom }}</div>
+											<div class="mini-card-header">
+												<div class="mini-card-logo">
+													<img *ngIf="s.logo" [src]="s.logo" alt="Logo" class="societe-logo-mini" />
+													<div *ngIf="!s.logo" class="societe-logo-placeholder">
+														<i class="bi bi-building"></i>
+													</div>
+												</div>
+												<div class="mini-card-title">{{ s.nom }}</div>
+											</div>
+											<div class="mini-card-line" *ngIf="s.description">
+												<span class="label"><i class="bi bi-file-text"></i> Description:</span>
+												<span class="value description-text">{{ s.description }}</span>
+											</div>
 											<div class="mini-card-line" *ngIf="s.adresse"><span class="label">Adr:</span> <span class="value">{{ s.adresse }}</span></div>
 											<div class="mini-card-line" *ngIf="s.rcs"><span class="label">RCS:</span> <span class="value">{{ s.rcs }}</span></div>
 											<div class="mini-card-line" *ngIf="s.tva"><span class="label">TVA:</span> <span class="value">{{ s.tva }}</span></div>
@@ -414,6 +426,44 @@
 													<label class="form-label"><i class="bi bi-geo-alt"></i> Adresse</label>
 													<input [(ngModel)]="newSociete.adresse" name="nsAdr" class="form-control modern-input" placeholder="Adresse complète" />
 												</div>
+												
+												<!-- Logo Upload Zone -->
+												<div class="col-12">
+													<label class="form-label"><i class="bi bi-image"></i> Logo</label>
+													<div class="logo-upload-compact" 
+														[class.dragging]="isDraggingLogo"
+														(dragover)="onDragOverLogo($event)"
+														(dragleave)="onDragLeaveLogo($event)"
+														(drop)="onDropLogo($event)">
+														<div *ngIf="!newSociete.logo" class="upload-zone-content">
+															<i class="bi bi-cloud-upload"></i>
+															<span>Glisser une image ou</span>
+															<label class="btn-browse">
+																Parcourir
+																<input type="file" accept="image/*" (change)="onFileSelectedForNewSociete($event)" style="display: none" />
+															</label>
+														</div>
+														<div *ngIf="newSociete.logo" class="logo-preview-compact">
+															<img [src]="newSociete.logo" alt="Logo" />
+															<button type="button" class="btn-remove-logo" (click)="removeLogoFromNewSociete()">
+																<i class="bi bi-x-circle-fill"></i>
+															</button>
+														</div>
+													</div>
+												</div>
+
+												<!-- Description -->
+												<div class="col-12">
+													<label class="form-label"><i class="bi bi-file-text"></i> Description</label>
+													<textarea 
+														[(ngModel)]="newSociete.description" 
+														name="nsDesc" 
+														class="form-control modern-input" 
+														placeholder="Description de la société"
+														rows="3"
+													></textarea>
+												</div>
+												
 												<!-- Ligne 2 : RCS et TVA -->
 												<div class="col-md-6">
 													<label class="form-label"><i class="bi bi-file-text"></i> RCS</label>
@@ -766,6 +816,44 @@
 											<label class="form-label"><i class="bi bi-geo-alt"></i> Adresse</label>
 											<input [(ngModel)]="newSociete.adresse" name="editNsAdr" class="form-control modern-input" placeholder="Adresse complète" />
 										</div>
+										
+										<!-- Logo Upload Zone -->
+										<div class="col-12">
+											<label class="form-label"><i class="bi bi-image"></i> Logo</label>
+											<div class="logo-upload-compact" 
+												[class.dragging]="isDraggingLogo"
+												(dragover)="onDragOverLogo($event)"
+												(dragleave)="onDragLeaveLogo($event)"
+												(drop)="onDropLogo($event)">
+												<div *ngIf="!newSociete.logo" class="upload-zone-content">
+													<i class="bi bi-cloud-upload"></i>
+													<span>Glisser une image ou</span>
+													<label class="btn-browse">
+														Parcourir
+														<input type="file" accept="image/*" (change)="onFileSelectedForNewSociete($event)" style="display: none" />
+													</label>
+												</div>
+												<div *ngIf="newSociete.logo" class="logo-preview-compact">
+													<img [src]="newSociete.logo" alt="Logo" />
+													<button type="button" class="btn-remove-logo" (click)="removeLogoFromNewSociete()">
+														<i class="bi bi-x-circle-fill"></i>
+													</button>
+												</div>
+											</div>
+										</div>
+
+										<!-- Description -->
+										<div class="col-12">
+											<label class="form-label"><i class="bi bi-file-text"></i> Description</label>
+											<textarea 
+												[(ngModel)]="newSociete.description" 
+												name="editNsDesc" 
+												class="form-control modern-input" 
+												placeholder="Description de la société"
+												rows="3"
+											></textarea>
+										</div>
+										
 										<!-- Ligne 2 : RCS et TVA -->
 										<div class="col-md-6">
 											<label class="form-label"><i class="bi bi-file-text"></i> RCS</label>
@@ -815,6 +903,44 @@
 													<label class="form-label"><i class="bi bi-geo-alt"></i> Adresse</label>
 													<input [(ngModel)]="s.adresse" [name]="'esAdr' + i" class="form-control" placeholder="Adresse complète" />
 												</div>
+												
+												<!-- Logo Upload Zone -->
+												<div class="col-12">
+													<label class="form-label"><i class="bi bi-image"></i> Logo</label>
+													<div class="logo-upload-compact" 
+														[class.dragging]="isDraggingLogo && editingSocieteIndex === i"
+														(dragover)="onDragOverLogoForSociete($event, i)"
+														(dragleave)="onDragLeaveLogoForSociete($event)"
+														(drop)="onDropLogoForSociete($event, i)">
+														<div *ngIf="!s.logo" class="upload-zone-content">
+															<i class="bi bi-cloud-upload"></i>
+															<span>Glisser une image ou</span>
+															<label class="btn-browse">
+																Parcourir
+																<input type="file" accept="image/*" (change)="onFileSelectedForSociete($event, i)" style="display: none" />
+															</label>
+														</div>
+														<div *ngIf="s.logo" class="logo-preview-compact">
+															<img [src]="s.logo" alt="Logo" />
+															<button type="button" class="btn-remove-logo" (click)="removeLogoFromSociete(s)">
+																<i class="bi bi-x-circle-fill"></i>
+															</button>
+														</div>
+													</div>
+												</div>
+
+												<!-- Description -->
+												<div class="col-12">
+													<label class="form-label"><i class="bi bi-file-text"></i> Description</label>
+													<textarea 
+														[(ngModel)]="s.description" 
+														[name]="'esDesc' + i" 
+														class="form-control" 
+														placeholder="Description de la société"
+														rows="3"
+													></textarea>
+												</div>
+												
 												<!-- Ligne 2 : RCS et TVA -->
 												<div class="col-md-6">
 													<label class="form-label"><i class="bi bi-file-text"></i> RCS</label>

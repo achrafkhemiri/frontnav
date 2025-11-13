@@ -21,6 +21,7 @@ import { NotificationsComponent } from './component/notifications/notifications.
 import { RecapComponent } from './component/recap/recap.component';
 import { RecapDepotComponent } from './component/recap-depot/recap-depot.component';
 import { DeclarationComponent } from './component/declaration/declaration.component';
+import { SocieteComponent } from './component/societe/societe.component';
 
 // Importation des guards
 import { AuthGuard } from './guards/auth.guard';
@@ -42,6 +43,7 @@ const routes: Routes = [
   { path: 'depot', component: DepotComponent, canActivate: [AuthGuard] },
   { path: 'clients', component: ClientsComponent, canActivate: [AuthGuard] },
   { path: 'depots', component: DepotsComponent, canActivate: [AuthGuard] },
+  { path: 'societe', component: SocieteComponent, canActivate: [AuthGuard] },
   { path: 'projet', component: ProjetComponent, canActivate: [AuthGuard] },
   { path: 'declaration', component: DeclarationComponent, canActivate: [AuthGuard] },
   { path: 'projet/:id/parametre', component: ProjetParametreComponent, canActivate: [AuthGuard] },

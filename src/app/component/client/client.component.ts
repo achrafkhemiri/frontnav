@@ -1296,9 +1296,9 @@ export class ClientComponent {
     doc.setFont('helvetica', 'bold');
     let statsY = this.projetActif ? 60 : 30;
     doc.text(`Total Clients: ${totalClients}`, 14, statsY);
-    doc.text(`Quantité Totale: ${totalQuantiteAutorisee.toFixed(0)} T`, 70, statsY);
-    doc.text(`Total Enlevé: ${totalEnleve.toFixed(2)} T`, 140, statsY);
-    doc.text(`Reste Total: ${totalReste.toFixed(2)} T`, 200, statsY);
+    doc.text(`Quantité Totale: ${totalQuantiteAutorisee.toFixed(0)} Kg`, 70, statsY);
+    doc.text(`Total Enlevé: ${totalEnleve.toFixed(0)} Kg`, 140, statsY);
+    doc.text(`Reste Total: ${totalReste.toFixed(0)} Kg`, 200, statsY);
 
     // Filtres appliqués
     if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
@@ -1334,8 +1334,8 @@ export class ClientComponent {
             client.mf || '-',
             code,
             quantiteAutorisee.toFixed(0),
-            totalLivre.toFixed(2),
-            reste.toFixed(2)
+            totalLivre.toFixed(0),
+            reste.toFixed(0)
           ]);
         });
       } else {
@@ -1350,8 +1350,8 @@ export class ClientComponent {
           client.mf || '-',
           '-',
           quantiteAutorisee.toFixed(0),
-          totalLivre.toFixed(2),
-          reste.toFixed(2)
+          totalLivre.toFixed(0),
+          reste.toFixed(0)
         ]);
       }
     });
@@ -1421,8 +1421,8 @@ export class ClientComponent {
             'MF': client.mf || '-',
             'Autorisation': code,
             'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(0),
-            'Quantité Vendue (kg)': totalLivre.toFixed(2),
-            'Reste (kg)': reste.toFixed(2)
+            'Quantité Vendue (kg)': totalLivre.toFixed(0),
+            'Reste (kg)': reste.toFixed(0)
           });
         });
       } else {
@@ -1436,8 +1436,8 @@ export class ClientComponent {
           'MF': client.mf || '-',
           'Autorisation': '-',
           'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(0),
-          'Quantité Vendue (kg)': totalLivre.toFixed(2),
-          'Reste (kg)': reste.toFixed(2)
+          'Quantité Vendue (kg)': totalLivre.toFixed(0),
+          'Reste (kg)': reste.toFixed(0)
         });
       }
     });
@@ -1540,9 +1540,9 @@ export class ClientComponent {
 
     const statsData = [
       { 'Statistique': 'Total Clients', 'Valeur': totalClients },
-      { 'Statistique': 'Quantité Totale Autorisée (T)', 'Valeur': totalQuantiteAutorisee.toFixed(2) },
-      { 'Statistique': 'Total Enlevé (T)', 'Valeur': totalEnleve.toFixed(2) },
-      { 'Statistique': 'Reste Total (T)', 'Valeur': totalReste.toFixed(2) }
+      { 'Statistique': 'Quantité Totale Autorisée (T)', 'Valeur': totalQuantiteAutorisee.toFixed(0) },
+      { 'Statistique': 'Total Enlevé (T)', 'Valeur': totalEnleve.toFixed(0) },
+      { 'Statistique': 'Reste Total (T)', 'Valeur': totalReste.toFixed(0) }
     ];
 
     if (this.projetActif) {

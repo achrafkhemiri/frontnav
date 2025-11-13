@@ -95,8 +95,11 @@ export class ProjetComponent {
   showSocieteDropdown: boolean = false;
   // Formulaire rapide pour créer une nouvelle société
   showNewSocieteForm: boolean = false;
-  newSociete: SocieteDTO = { nom: '', adresse: '', rcs: '', contact: '', tva: '' };
+  newSociete: SocieteDTO = { nom: '', adresse: '', rcs: '', contact: '', tva: '', logo: '', description: '' };
   newSocieteContacts: string[] = [];
+  
+  // Drag and drop pour logo
+  isDraggingLogo: boolean = false;
   
   // Pagination
   currentPage: number = 1;
@@ -212,8 +215,9 @@ export class ProjetComponent {
   this.selectedSocietes = [];
   this.societeSearchInput = '';
   this.showNewSocieteForm = false;
-  this.newSociete = { nom: '', adresse: '', rcs: '', contact: '', tva: '' };
+  this.newSociete = { nom: '', adresse: '', rcs: '', contact: '', tva: '', logo: '', description: '' };
   this.newSocieteContacts = [];
+  this.isDraggingLogo = false;
     
     setTimeout(() => {
       const modal = document.getElementById('addProjetModal');
@@ -404,6 +408,8 @@ export class ProjetComponent {
         rcs: s.rcs,
         contact: this.stringifyContacts(this.getContactsArray(s)),
         tva: s.tva,
+        logo: s.logo || '',
+        description: s.description || ''
       }));
       delete (payload as any).societeNoms;
     } else if (!(payload as any).societeNoms) {
@@ -563,6 +569,8 @@ export class ProjetComponent {
         rcs: s.rcs,
         contact: this.stringifyContacts(this.getContactsArray(s)),
         tva: s.tva,
+        logo: s.logo || '',
+        description: s.description || ''
       }));
       delete (payload as any).societeNoms;
     }
@@ -902,7 +910,7 @@ export class ProjetComponent {
     const nom = this.societeSearchInput.trim();
     if (!nom) return;
     if (!this.selectedSocietes.find(s => s.nom === nom)) {
-      this.newSociete = { nom, adresse: '', rcs: '', contact: '', tva: '' };
+      this.newSociete = { nom, adresse: '', rcs: '', contact: '', tva: '', logo: '', description: '' };
       this.newSocieteContacts = [];
       this.showNewSocieteForm = true;
     }
@@ -956,13 +964,122 @@ export class ProjetComponent {
     copy._contacts = [...this.newSocieteContacts];
     copy.contact = this.stringifyContacts(copy._contacts);
     this.selectedSocietes.push(copy);
-    this.newSociete = { nom: '', adresse: '', rcs: '', contact: '', tva: '' };
+    this.newSociete = { nom: '', adresse: '', rcs: '', contact: '', tva: '', logo: '', description: '' };
     this.newSocieteContacts = [];
     this.showNewSocieteForm = false;
   }
 
   cancelAddNewSociete(): void {
     this.showNewSocieteForm = false;
+  }
+
+  // Drag and drop handlers for logo
+  onDragOverLogo(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDraggingLogo = true;
+  }
+
+  onDragLeaveLogo(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDraggingLogo = false;
+  }
+
+  onDropLogo(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isDraggingLogo = false;
+
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      this.handleLogoFile(files[0]);
+    }
+  }
+
+  onFileSelectedForNewSociete(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.handleLogoFile(input.files[0]);
+    }
+  }
+
+  handleLogoFile(file: File): void {
+    // Vérifier que c'est une image
+    if (!file.type.startsWith('image/')) {
+      alert('Veuillez sélectionner un fichier image');
+      return;
+    }
+
+    // Vérifier la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('La taille de l\'image ne doit pas dépasser 5MB');
+      return;
+    }
+
+    // Convertir en base64
+    const reader = new FileReader();
+    reader.onload = (e: ProgressEvent<FileReader>) => {
+      const base64 = e.target?.result as string;
+      this.newSociete.logo = base64;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  removeLogoFromNewSociete(): void {
+    this.newSociete.logo = '';
+  }
+
+  // Gestion du logo pour les sociétés en édition (selectedSocietes)
+  editingSocieteIndex: number = -1;
+
+  onDragOverLogoForSociete(event: DragEvent, index: number): void {
+    event.preventDefault();
+    this.isDraggingLogo = true;
+    this.editingSocieteIndex = index;
+  }
+
+  onDragLeaveLogoForSociete(event: DragEvent): void {
+    this.isDraggingLogo = false;
+    this.editingSocieteIndex = -1;
+  }
+
+  onDropLogoForSociete(event: DragEvent, index: number): void {
+    event.preventDefault();
+    this.isDraggingLogo = false;
+    this.editingSocieteIndex = -1;
+    const files = event.dataTransfer?.files;
+    if (files && files.length > 0) {
+      this.handleLogoFileForSociete(files[0], index);
+    }
+  }
+
+  onFileSelectedForSociete(event: Event, index: number): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.handleLogoFileForSociete(input.files[0], index);
+    }
+  }
+
+  handleLogoFileForSociete(file: File, index: number): void {
+    if (!file.type.startsWith('image/')) {
+      alert('Veuillez sélectionner un fichier image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Le fichier ne doit pas dépasser 5 Mo.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      this.selectedSocietes[index].logo = base64;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  removeLogoFromSociete(s: SocieteDTO): void {
+    s.logo = '';
   }
 
   // TrackBy pour éviter la perte de focus dans les inputs

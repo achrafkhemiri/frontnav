@@ -1,0 +1,236 @@
+<app-navbar [isSidebarOpen]="isSidebarOpen" [sidebarWidth]="220" [sidebarClosedWidth]="70"></app-navbar>
+<div class="layout" [class.sidebar-closed]="!isSidebarOpen">
+  <app-sidebar (toggle)="isSidebarOpen = $event"></app-sidebar>
+  <main class="content">
+    <!-- Breadcrumb Navigation -->
+    <app-breadcrumb [items]="breadcrumbItems" [showBackButton]="false"></app-breadcrumb>
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="header-left">
+        <div class="header-icon">
+          <i class="bi bi-building"></i>
+        </div>
+        <div>
+          <h1 class="page-title">Sociétés</h1>
+          <p class="page-subtitle">{{ filteredSocietes.length }} société(s) trouvée(s)</p>
+        </div>
+      </div>
+      <button class="add-btn" (click)="openCreateDialog()">
+        <i class="bi bi-plus-lg"></i>
+        <span>Nouvelle Société</span>
+      </button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar-section">
+      <div class="search-box">
+        <i class="bi bi-search"></i>
+        <input
+          type="text"
+          [(ngModel)]="searchTerm"
+          (input)="onSearch()"
+          placeholder="Rechercher par nom, adresse ou RCS..."
+          class="search-input"
+        />
+      </div>
+      <div class="toolbar-right">
+        <span class="results-count">{{ filteredSocietes.length }} résultat(s)</span>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Logo</th>
+            <th>Nom</th>
+            <th>Description</th>
+            <th>Adresse</th>
+            <th>RCS</th>
+            <th>Contact</th>
+            <th>TVA</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let societe of filteredSocietes">
+            <td>
+              <div class="logo-cell">
+                <img
+                  *ngIf="societe.logo"
+                  [src]="societe.logo"
+                  alt="Logo"
+                  class="logo-thumbnail"
+                />
+                <div *ngIf="!societe.logo" class="logo-placeholder">
+                  <i class="bi bi-building"></i>
+                </div>
+              </div>
+            </td>
+            <td><strong>{{ societe.nom }}</strong></td>
+            <td>
+              <div class="description-cell" [title]="societe.description || '-'">
+                {{ societe.description || '-' }}
+              </div>
+            </td>
+            <td>{{ societe.adresse || '-' }}</td>
+            <td>{{ societe.rcs || '-' }}</td>
+            <td>{{ formatContacts(societe.contact) }}</td>
+            <td>{{ societe.tva || '-' }}</td>
+            <td>
+              <button
+                class="btn-action btn-edit"
+                (click)="openEditDialog(societe)"
+                title="Modifier"
+              >
+                <i class="bi bi-pencil-fill"></i>
+              </button>
+              <button
+                class="btn-action btn-delete"
+                (click)="deleteSociete(societe.id)"
+                title="Supprimer"
+              >
+                <i class="bi bi-trash-fill"></i>
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="filteredSocietes.length === 0">
+            <td colspan="8" class="no-data">
+              <i class="bi bi-inbox"></i>
+              <p>Aucune société trouvée</p>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- Dialog -->
+<div class="dialog-overlay" *ngIf="showDialog" (click)="closeDialog()">
+  <div class="dialog" (click)="$event.stopPropagation()">
+    <div class="dialog-header">
+      <h3>{{ dialogTitle }}</h3>
+      <button class="btn-close" (click)="closeDialog()">×</button>
+    </div>
+
+    <div class="dialog-body">
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label>Nom de la société <span class="required">*</span></label>
+          <input
+            type="text"
+            [(ngModel)]="dialogSociete.nom"
+            placeholder="Nom de la société"
+            class="form-control"
+          />
+        </div>
+
+        <div class="form-group full-width">
+          <label>Logo</label>
+          <div
+            class="logo-upload-zone"
+            [class.dragging]="isDragging"
+            (dragover)="onDragOver($event)"
+            (dragleave)="onDragLeave($event)"
+            (drop)="onDrop($event)"
+          >
+            <div *ngIf="!logoPreview" class="upload-placeholder">
+              <i class="fas fa-cloud-upload-alt upload-icon"></i>
+              <p>Glissez-déposez une image ici ou</p>
+              <label class="btn btn-secondary">
+                Parcourir
+                <input
+                  type="file"
+                  accept="image/*"
+                  (change)="onFileSelected($event)"
+                  style="display: none"
+                />
+              </label>
+              <small>Format: JPG, PNG, GIF (Max: 5MB)</small>
+            </div>
+            <div *ngIf="logoPreview" class="logo-preview-container">
+              <img [src]="logoPreview" alt="Preview" class="logo-preview" />
+              <button class="btn btn-remove" (click)="removeLogo()">
+                <i class="fas fa-times"></i> Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group full-width">
+          <label>Description</label>
+          <textarea
+            [(ngModel)]="dialogSociete.description"
+            placeholder="Description de la société"
+            class="form-control"
+            rows="4"
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Adresse</label>
+          <input
+            type="text"
+            [(ngModel)]="dialogSociete.adresse"
+            placeholder="Adresse"
+            class="form-control"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>RCS</label>
+          <input
+            type="text"
+            [(ngModel)]="dialogSociete.rcs"
+            placeholder="RCS"
+            class="form-control"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>TVA</label>
+          <input
+            type="text"
+            [(ngModel)]="dialogSociete.tva"
+            placeholder="Numéro de TVA"
+            class="form-control"
+          />
+        </div>
+
+        <div class="form-group full-width">
+          <label><i class="bi bi-telephone"></i> Contacts</label>
+          <div class="contacts-editor">
+            <div class="contact-item" *ngFor="let c of dialogContacts; let i = index; trackBy: trackByIndex">
+              <input 
+                type="tel" 
+                [(ngModel)]="dialogContacts[i]" 
+                class="form-control" 
+                placeholder="Ex: +33 6 12 34 56 78" 
+              />
+              <button 
+                type="button" 
+                class="btn btn-sm btn-danger" 
+                (click)="removeContact(i)"
+                [disabled]="dialogContacts.length === 1">
+                <i class="bi bi-x"></i>
+              </button>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" (click)="addContact()">
+              <i class="bi bi-plus"></i> Ajouter un contact
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialog-footer">
+      <button class="btn btn-secondary" (click)="closeDialog()">Annuler</button>
+      <button class="btn btn-primary" (click)="saveSociete()">
+        {{ isEditMode ? 'Modifier' : 'Créer' }}
+      </button>
+    </div>
+  </div>
+</div>

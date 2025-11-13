@@ -1280,7 +1280,7 @@ export class DechargementComponent implements OnInit {
         </div>
 
         <div class="title-section">
-          <div class="main-title">BON DE SORTIE</div>
+          <div class="main-title">BON DE LIVRAISON</div>
           <div class="bon-info">N° Bon: ${dech.numBonLivraison || 'N/A'}</div>
           <div class="bon-info">N° Ticket: ${dech.numTicket || 'N/A'}</div>
           
@@ -1377,6 +1377,39 @@ export class DechargementComponent implements OnInit {
       return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     };
 
+    // Formatter la description pour l'affichage dans l'en-tête A5
+    // - split sur '|' si présent
+    // - wrap en lignes d'environ 35 caractères (préserve mots quand possible)
+    // - échapper chaque ligne et joindre avec <br>
+    let formattedDescription = '';
+    if (societeInfo?.description) {
+      const rawDesc = String(societeInfo.description).trim();
+      // split sur '|' prioritairement
+      const parts = rawDesc.split('|').map(p => p.trim()).filter(p => p.length > 0);
+      const wrapLimit = 35;
+      const wrappedParts: string[] = [];
+      parts.forEach(p => {
+        if (p.length <= wrapLimit) {
+          wrappedParts.push(p);
+        } else {
+          // essayer de conserver les mots sur une ligne
+          const words = p.split(/\s+/);
+          let line = '';
+          for (const w of words) {
+            if ((line + ' ' + w).trim().length <= wrapLimit) {
+              line = (line + ' ' + w).trim();
+            } else {
+              if (line) wrappedParts.push(line);
+              line = w;
+            }
+          }
+          if (line) wrappedParts.push(line);
+        }
+      });
+      // échapper chaque ligne puis joindre avec <br>
+      formattedDescription = wrappedParts.map(l => escapeHtml(l)).join('<br>');
+    }
+
     // Préparer le contact + fallback
     let contactText = '';
     const rawContact = societeInfo?.contact;
@@ -1402,7 +1435,7 @@ export class DechargementComponent implements OnInit {
     const resteAvantPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint, dech.id) : 0;
     const resteApresPrint = (dech.clientId && autorisationCodePrint) ? this.getResteClientForCode(dech.clientId, autorisationCodePrint) : 0;
 
-    // Structure identique à l'A4 mais réduite pour tenir A5
+    // Structure identique à l'A4 mais réduite pour tenir A5 en paysage
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1410,56 +1443,113 @@ export class DechargementComponent implements OnInit {
         <meta charset="UTF-8">
         <title>Bon de Sortie A5 - ${escapeHtml(dech.numTicket || dech.numBonLivraison || dech.id)}</title>
         <style>
-          /* Reduce top whitespace: even smaller page top margin and no body padding */
-          @page { size: A5 portrait; margin: 1mm 1mm 1mm 1mm; }
+          /* Mode paysage A5 avec marges minimales */
+          @page { size: A5 landscape; margin: 3mm 3mm 3mm 3mm; }
           body { font-family: Arial, sans-serif; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
-          .container { max-width: 148mm; margin: 0 auto; padding-top:0mm; }
+          .container { max-width: 210mm; margin: 0 auto; padding: 2mm; }
 
-          /* Scaled down sizes compared to A4 */
-          .header { display:flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 4px; }
-          .header-left, .header-right { font-size: 9px; line-height: 1.2; }
-          .company-name { font-size: 12px; font-weight: bold; }
-          .title-section { text-align: center; margin: 6px 0; }
-          .main-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-          .bon-info { font-size: 11px; font-weight: 700; margin: 3px 0; }
-          .product-info { text-align: center; font-size: 10px; margin: 6px 0; line-height: 1.2; }
-          .vehicle-info { display: flex; justify-content: space-between; gap: 6px; margin: 6px 0; font-size: 10px; }
-          .poids-table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 11px; }
-          .poids-table th { background: #667eea; color: white; padding: 5px; text-align: center; font-weight: bold; border: 1px solid #333; }
-          .poids-table td { padding: 6px; text-align: center; font-weight: bold; border: 1px solid #333; font-size: 12px; }
-          .signatures { display:flex; justify-content:space-between; margin-top: 14px; }
-          .signature-block { width: 45%; text-align: center; font-size: 10px; }
-          .signature-line { border-top: 1.5px solid #333; margin-top: 22px; }
-          .print-button { display:block; width:160px; margin: 8px auto; padding: 6px 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:6px; text-decoration:none; text-align:center; font-size:12px; }
+          /* En-tête avec 3 colonnes: Nom société (gauche), Logo (centre), Description (droite) */
+          .header { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr 1fr; 
+            gap: 8px; 
+            align-items: start; 
+            margin-bottom: 6px; 
+            border-bottom: 1px solid #333; 
+            padding-bottom: 6px; 
+          }
+          .header-left { 
+            font-size: 9px; 
+            line-height: 1.3; 
+            text-align: left;
+          }
+          .header-center { 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;
+          }
+          .header-center img { 
+            max-width: 85px; 
+            max-height: 60px; 
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+          }
+          .header-right { 
+            font-size: 10px; 
+            line-height: 1.5; 
+            text-align: center;
+            max-width: 100%;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: normal;
+            white-space: normal;
+            padding-left: 4px;
+            hyphens: auto;
+            display: flex;
+            justify-content: flex-end;
+            align-items: start;
+          }
+          .company-name { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
+          .title-section { text-align: center; margin: 4px 0; }
+          .main-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+          .bon-info { font-size: 10px; font-weight: 700; margin: 2px 0; }
+          .product-info { text-align: center; font-size: 9px; margin: 4px 0; line-height: 1.3; }
+          .vehicle-info { display: flex; justify-content: center; gap: 4cm; margin: 4px 0; font-size: 9px; }
+          .poids-table { width: 80%; margin: 4px auto; border-collapse: collapse; font-size: 10px; }
+          .poids-table th { background: #667eea; color: white; padding: 4px; text-align: center; font-weight: bold; border: 1px solid #333; }
+          .poids-table td { padding: 5px; text-align: center; font-weight: bold; border: 1px solid #333; font-size: 11px; }
+          .signatures { display:flex; justify-content:space-around; margin-top: 10px; }
+          .signature-block { width: 40%; text-align: center; font-size: 9px; }
+          .signature-line { border-top: 1.5px solid #333; margin-top: 18px; }
+          .print-button { display:block; width:160px; margin: 6px auto; padding: 5px 8px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:6px; text-decoration:none; text-align:center; font-size:11px; cursor:pointer; border:none; }
           @media print { .print-button { display:none } }
         </style>
       </head>
       <body>
         <div class="container">
-          <!-- Print button moved below to avoid top gap; it will be hidden when printing -->
+          <!-- En-tête avec logo au centre et description à droite (affiché seulement si logo ou description existe) -->
+          ${(societeInfo?.logo || formattedDescription) ? `
           <div class="header">
             <div class="header-left">
-              <div class="company-name">${escapeHtml(societeInfo?.nom || (chargement?.societeP || 'Société'))}</div>
-              ${societeInfo?.adresse ? `<div>Adresse: ${escapeHtml(societeInfo.adresse)}</div>` : ''}
-              ${societeInfo?.rcs ? `<div>N° RCS: ${escapeHtml(societeInfo.rcs)}</div>` : ''}
-              ${societeInfo?.tva ? `<div>N° TVA: ${escapeHtml(societeInfo.tva)}</div>` : ''}
-              <div>${escapeHtml(contactText)}</div>
+              <!-- Vide pour garder la structure grid -->
+            </div>
+            <div class="header-center">
+              ${societeInfo?.logo ? `<img src="${escapeHtml(societeInfo.logo)}" alt="Logo">` : ''}
             </div>
             <div class="header-right">
-              <div style="font-weight:600">${escapeHtml(depot?.nom || client?.nom || '')}</div>
-              ${depot?.adresse || client?.adresse ? `<div style="font-size:10px">Adresse: ${escapeHtml(depot?.adresse || client?.adresse || '')}</div>` : ''}
-              ${(depot?.mf || client?.mf) ? `<div>MF: ${escapeHtml(depot?.mf || client?.mf || '')}</div>` : ''}
-              <div style="font-size:10px">${escapeHtml(dateFormatted)} ${escapeHtml(heureDepart)}</div>
+              ${formattedDescription ? `<div style="font-size:10px; line-height:1.4; text-align:center; overflow-wrap:break-word; word-wrap:break-word; word-break:normal; white-space:normal; max-width:100%; hyphens:auto; display:block; direction:rtl; unicode-bidi:embed;">${formattedDescription}</div>` : ''}
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- Bloc avec 3 colonnes: Société (gauche), BON DE LIVRAISON (centre), Client/Dépôt (droite) -->
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; align-items:start; margin-bottom:6px;">
+            <!-- Informations société à gauche -->
+            <div style="font-size:9px; line-height:1.3; text-align:left;">
+              <div style="font-size:11px; font-weight:bold; margin-bottom:2px;">${escapeHtml(societeInfo?.nom || (chargement?.societeP || 'Société'))}</div>
+              ${societeInfo?.adresse ? `<div style="font-size:8px">Adresse: ${escapeHtml(societeInfo.adresse)}</div>` : ''}
+              ${societeInfo?.rcs ? `<div style="font-size:8px">N° RCS: ${escapeHtml(societeInfo.rcs)}</div>` : ''}
+              ${societeInfo?.tva ? `<div style="font-size:8px">N° TVA: ${escapeHtml(societeInfo.tva)}</div>` : ''}
+              <div style="font-size:8px">${escapeHtml(contactText)}</div>
+            </div>
+
+            <!-- BON DE LIVRAISON au centre -->
+            <div style="text-align:center;">
+              <div style="font-size:13px; font-weight:700; margin-bottom:3px;">BON DE LIVRAISON</div>
+              <div style="font-size:10px; font-weight:700; margin:2px 0;">N° Bon: ${escapeHtml(dech.numBonLivraison || 'N/A')}</div>
+              <div style="font-size:10px; font-weight:700; margin:2px 0;">N° Ticket: ${escapeHtml(dech.numTicket || 'N/A')}</div>
+            </div>
+
+            <!-- Informations client/dépôt à droite -->
+            <div style="text-align:right; font-size:8px;">
+              <div style="font-weight:600;">${escapeHtml(depot?.nom || client?.nom || '')}</div>
+              ${depot?.adresse || client?.adresse ? `<div style="font-size:8px">Adresse: ${escapeHtml(depot?.adresse || client?.adresse || '')}</div>` : ''}
+              ${(depot?.mf || client?.mf) ? `<div style="font-size:8px">MF: ${escapeHtml(depot?.mf || client?.mf || '')}</div>` : ''}
             </div>
           </div>
 
           <!-- print button moved to bottom to avoid pushing content down -->
-
-          <div class="title-section">
-            <div class="main-title">BON DE SORTIE</div>
-            <div class="bon-info">N° Bon: ${escapeHtml(dech.numBonLivraison || 'N/A')}</div>
-            <div class="bon-info">N° Ticket: ${escapeHtml(dech.numTicket || 'N/A')}</div>
-          </div>
 
           <div class="product-info">
             <div><strong>Produit:</strong> ${escapeHtml(dech.produit || 'N/A')} &nbsp; <strong>Navire:</strong> ${escapeHtml(dech.navire || 'N/A')} &nbsp; <strong>Port:</strong> ${escapeHtml(dech.port || 'N/A')}</div>
@@ -1467,11 +1557,11 @@ export class DechargementComponent implements OnInit {
           </div>
 
           <div class="vehicle-info">
-            <div style="text-align:left">
+            <div style="text-align:center">
               <div style="font-weight:600">VEHICULE: ${escapeHtml(camion?.matricule || 'N/A')}</div>
               <div style="font-size:10px">Chauffeur: ${escapeHtml(chauffeur?.nom || 'N/A')}</div>
             </div>
-            <div style="text-align:right">
+            <div style="text-align:center">
               <div style="font-weight:600">Transporteur: ${escapeHtml(camion?.societe || dech.societe || 'N/A')}</div>
               <div style="font-size:10px">CIN: ${escapeHtml(chauffeur?.numCin || 'N/A')}</div>
             </div>
@@ -2143,8 +2233,11 @@ export class DechargementComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmCodeDialogComponent, { disableClose: true });
     dialogRef.afterClosed().subscribe((ok: boolean) => {
       if (ok === true) {
-        this.dechargementToDelete = dech;
-        this.showDeleteDialog = true;
+        // Ajouter un délai pour laisser le backdrop Material Dialog disparaître complètement
+        setTimeout(() => {
+          this.dechargementToDelete = dech;
+          this.showDeleteDialog = true;
+        }, 100);
       }
     });
   }

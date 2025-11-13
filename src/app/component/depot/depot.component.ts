@@ -476,7 +476,7 @@ export class DepotComponent {
                 const nomProjet = projet.nom || `Projet ${targetProjetId}`;
                 const alertMsg = `Impossible d'ajouter le dépôt : la quantité autorisée dépasse la quantité restante.\n\n` +
                                  `📊 Projet "${nomProjet}" :\n` +
-                                 `✅ Quantité restante disponible : ${quantiteRestante.toFixed(2)}`;
+                                 `✅ Quantité restante disponible : ${quantiteRestante.toFixed(0)}`;
                 // show temporary alert (create method below)
                 this.showTemporaryAlert(alertMsg, 'danger');
               },
@@ -708,7 +708,7 @@ export class DepotComponent {
     if (quantite > 0) {
       this.showErrorModal = true;
       this.modalTitle = 'Suppression impossible';
-      this.modalMessage = `Ce dépôt a une quantité vendue de ${quantite.toFixed(2)} kg. Vous ne pouvez pas supprimer un dépôt ayant des ventes enregistrées.`;
+      this.modalMessage = `Ce dépôt a une quantité vendue de ${quantite.toFixed(0)} kg. Vous ne pouvez pas supprimer un dépôt ayant des ventes enregistrées.`;
       this.modalIcon = 'bi-exclamation-triangle-fill';
       this.modalIconColor = '#ef4444';
       return;
@@ -1129,7 +1129,7 @@ export class DepotComponent {
     doc.setFont('helvetica', 'bold');
     let statsY = projet ? Math.max(yPos + 6, 55) : 40;
     doc.text(`Total Dépôts: ${totalDepots}`, 14, statsY);
-    doc.text(`Quantité Totale Vendue: ${totalVendu.toFixed(2)} kg`, 90, statsY);
+    doc.text(`Quantité Totale Vendue: ${totalVendu.toFixed(0)} kg`, 90, statsY);
 
     if (this.dateFilterActive && (this.dateDebut || this.dateFin)) {
       doc.setFont('helvetica', 'italic');
@@ -1179,8 +1179,8 @@ export class DepotComponent {
       body: tableData.map(row => row.map((cell, idx) => {
         // Formatage des nombres pour affichage (PDF)
         if (idx >= 3 && typeof cell === 'number') {
-          if (idx === 6) return (cell as number).toFixed(1) + ' %';
-          return (cell as number).toFixed(2);
+          if (idx === 6) return (cell as number).toFixed(0) + ' %';
+          return (cell as number).toFixed(0);
         }
         return cell;
       })),
@@ -1218,24 +1218,25 @@ export class DepotComponent {
   // Export Excel
   exportToExcel(): void {
     // Préparer les données avec colonnes supplémentaires
+    // Garder les valeurs numériques comme des nombres (pas des chaînes) pour éviter les conversions incorrectes
     const data = this.filteredDepots.map(depot => {
       const quantiteAutorisee = depot.quantiteAutorisee || 0;
       const quantiteVendue = this.getQuantiteLivree(depot);
       const reste = quantiteAutorisee - quantiteVendue;
-      const pct = quantiteAutorisee === 0 ? 0 : (quantiteVendue / quantiteAutorisee) * 100;
+      const pct = quantiteAutorisee === 0 ? 0 : (quantiteVendue / quantiteAutorisee) * 100; // 0..100
       return {
         'Nom': depot.nom || '-',
         'Adresse': depot.adresse || '-',
         'Matricule Fiscal': depot.mf || '-',
-        'Quantité Autorisée (kg)': quantiteAutorisee.toFixed(2),
-        'Quantité Livrée (kg)': quantiteVendue.toFixed(2),
-        'Reste (kg)': reste.toFixed(2),
-        '% Utilisé': pct.toFixed(1) + ' %'
+        'Quantité Autorisée (kg)': quantiteAutorisee,
+        'Quantité Livrée (kg)': quantiteVendue,
+        'Reste (kg)': reste,
+        '% Utilisé': pct
       };
     });
 
-  // Créer la feuille de calcul avec en-tête projet (titre + meta)
-  const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
+    // Créer la feuille de calcul avec en-tête projet (titre + meta)
+    const ws: XLSX.WorkSheet = XLSX.utils.aoa_to_sheet([]);
     ws['!merges'] = ws['!merges'] || [];
     let currentRow = 0;
 
@@ -1258,8 +1259,21 @@ export class DepotComponent {
 
     currentRow++;
 
-  // Ajouter les données (les valeurs numériques sont des nombres, pas des chaînes)
-  XLSX.utils.sheet_add_json(ws, data, { origin: { r: currentRow, c: 0 }, header: Object.keys(data[0] || {}), skipHeader: false });
+    // Headers définis explicitement pour éviter header=[] ou différence d'ordre
+    const headers = [
+      'Nom', 'Adresse', 'Matricule Fiscal',
+      'Quantité Autorisée (kg)', 'Quantité Livrée (kg)', 'Reste (kg)', '% Utilisé'
+    ];
+
+    // Ajouter les données (les valeurs numériques sont des nombres, pas des chaînes)
+    // Si data est vide, on ajoute quand même la ligne d'en-tête pour garder la structure valide
+    if (data.length === 0) {
+      XLSX.utils.sheet_add_aoa(ws, [headers], { origin: { r: currentRow, c: 0 } });
+      // Mettre la référence manuellement
+      ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: currentRow, c: headers.length - 1 } });
+    } else {
+      XLSX.utils.sheet_add_json(ws, data, { origin: { r: currentRow, c: 0 }, header: headers, skipHeader: false });
+    }
 
     // Définir la largeur des colonnes
     ws['!cols'] = [
@@ -1278,35 +1292,45 @@ export class DepotComponent {
     // Post-traitement: formater les colonnes numériques et activer filtre + gel d'entête
     try {
       // Déterminer la plage utilisée
+      if (!ws['!ref']) {
+        // si pour une raison quelconque la ref n'existe pas, construire une ref minimale
+        const lastCol = headers.length - 1;
+        ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: currentRow + (data.length > 0 ? data.length : 0), c: lastCol } });
+      }
+
       const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
 
-      // Appliquer format numérique pour colonnes 4..6 (index 3..6) et pourcentage sur la dernière
+      // Appliquer format numérique pour colonnes 4..6 (index 3..5) et pourcentage sur la dernière (index 6)
       for (let R = range.s.r + 1; R <= range.e.r; ++R) { // +1 pour sauter l'en-tête
         // Quantité Autorisée (col D / index 3)
         const cellD = XLSX.utils.encode_cell({ r: R, c: 3 });
-        if (ws[cellD]) { ws[cellD].t = 'n'; ws[cellD].z = '0.00'; ws[cellD].v = Number(ws[cellD].v); }
+        if (ws[cellD] && typeof ws[cellD].v !== 'undefined') { const val = Number(ws[cellD].v); if (!isNaN(val)) { ws[cellD].t = 'n'; ws[cellD].z = '0'; ws[cellD].v = val; } }
 
         // Quantité Livrée (col E / index 4)
         const cellE = XLSX.utils.encode_cell({ r: R, c: 4 });
-        if (ws[cellE]) { ws[cellE].t = 'n'; ws[cellE].z = '0.00'; ws[cellE].v = Number(ws[cellE].v); }
+        if (ws[cellE] && typeof ws[cellE].v !== 'undefined') { const val = Number(ws[cellE].v); if (!isNaN(val)) { ws[cellE].t = 'n'; ws[cellE].z = '0'; ws[cellE].v = val; } }
 
         // Reste (col F / index 5)
         const cellF = XLSX.utils.encode_cell({ r: R, c: 5 });
-        if (ws[cellF]) { ws[cellF].t = 'n'; ws[cellF].z = '0.00'; ws[cellF].v = Number(ws[cellF].v); }
+        if (ws[cellF] && typeof ws[cellF].v !== 'undefined') { const val = Number(ws[cellF].v); if (!isNaN(val)) { ws[cellF].t = 'n'; ws[cellF].z = '0'; ws[cellF].v = val; } }
 
         // % Utilisé (col G / index 6) - stocké en pourcentage (0-100) -> convertir en fraction
         const cellG = XLSX.utils.encode_cell({ r: R, c: 6 });
-        if (ws[cellG]) {
+        if (ws[cellG] && typeof ws[cellG].v !== 'undefined') {
           const raw = Number(ws[cellG].v);
-          ws[cellG].t = 'n';
-          // convert to fraction for Excel percent format
-          ws[cellG].v = isNaN(raw) ? 0 : raw / 100;
-          ws[cellG].z = '0.0%';
+          if (!isNaN(raw)) {
+            ws[cellG].t = 'n';
+            // convert to fraction for Excel percent format
+            ws[cellG].v = raw / 100;
+            ws[cellG].z = '0.0%';
+          }
         }
       }
 
-      // Activer autofilter sur toute la table
-      (ws as any)['!autofilter'] = { ref: ws['!ref'] };
+      // Activer autofilter sur toute la table si la référence est valide
+      if (ws['!ref']) {
+        (ws as any)['!autofilter'] = { ref: ws['!ref'] };
+      }
 
       // Geler la 1ère ligne (vue du classeur)
       (wb as any).Workbook = (wb as any).Workbook || {};
@@ -1316,10 +1340,10 @@ export class DepotComponent {
       console.warn('Post-traitement Excel échoué:', e);
     }
 
-  // Feuille de statistiques
-  const totalVendu = this.filteredDepots.reduce((sum, d) => sum + (this.getQuantiteLivree(d) || 0), 0);
-  const totalDepots = this.filteredDepots.length;
-  const statsData: any[] = [];
+    // Feuille de statistiques
+    const totalVendu = this.filteredDepots.reduce((sum, d) => sum + (this.getQuantiteLivree(d) || 0), 0);
+    const totalDepots = this.filteredDepots.length;
+    const statsData: any[] = [];
     if (projet) {
       statsData.push({ 'Statistique': 'Projet', 'Valeur': projet.nom || '-' });
       statsData.push({ 'Statistique': 'Navire', 'Valeur': projet.nomNavire || '-' });
@@ -1327,7 +1351,7 @@ export class DepotComponent {
       statsData.push({ 'Statistique': 'Produit', 'Valeur': projet.nomProduit || '-' });
     }
     statsData.push({ 'Statistique': 'Total Dépôts', 'Valeur': totalDepots });
-    statsData.push({ 'Statistique': 'Quantité Totale Vendue (kg)', 'Valeur': totalVendu.toFixed(2) });
+    statsData.push({ 'Statistique': 'Quantité Totale Vendue (kg)', 'Valeur': Number(totalVendu.toFixed(0)) });
 
     const wsStats: XLSX.WorkSheet = XLSX.utils.json_to_sheet(statsData);
     wsStats['!cols'] = [{ wch: 30 }, { wch: 30 }];

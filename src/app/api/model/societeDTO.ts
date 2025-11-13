@@ -16,4 +16,6 @@ export interface SocieteDTO {
     rcs?: string;
     contact?: string; // JSON string of phone numbers
     tva?: string;
+    logo?: string; // Base64 encoded image
+    description?: string;
 }

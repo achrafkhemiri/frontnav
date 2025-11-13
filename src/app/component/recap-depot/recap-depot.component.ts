@@ -632,10 +632,10 @@ export class RecapDepotComponent {
     doc.setFont('helvetica', 'bold');
     doc.text('Statistiques:', 14, 35);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Quantité autorisée: ${this.getQuantiteAutorisee(this.selectedDepot.id).toFixed(2)} kg`, 14, 41);
+    doc.text(`Quantité autorisée: ${this.getQuantiteAutorisee(this.selectedDepot.id).toFixed(0)} kg`, 14, 41);
     doc.text(`Total voyages: ${this.filteredVoyages.length}`, 14, 47);
-    doc.text(`Total livré: ${this.getTotalLivre().toFixed(2)} kg`, 80, 47);
-    doc.text(`Reste: ${this.getReste().toFixed(2)} kg`, 160, 47);
+    doc.text(`Total livré: ${this.getTotalLivre().toFixed(0)} kg`, 80, 47);
+    doc.text(`Reste: ${this.getReste().toFixed(0)} kg`, 160, 47);
     
     // Filtres actifs
     if (this.voyageFilter || this.dateDebut || this.dateFin) {
@@ -664,8 +664,8 @@ export class RecapDepotComponent {
       v.numTicket || '',
       this.getCamionMatricule(v.camionId),
       this.getChauffeurNom(v.chauffeurId),
-      (v.poidsDepot || 0).toFixed(2),
-      this.computeResteCumuleForVoyage(this.filteredVoyages, v).toFixed(2)
+      (v.poidsDepot || 0).toFixed(0),
+      this.computeResteCumuleForVoyage(this.filteredVoyages, v).toFixed(0)
     ]);
     
     autoTable(doc, {
@@ -734,10 +734,10 @@ export class RecapDepotComponent {
       ['Dépôt', this.selectedDepot.nom],
       [],
       ['STATISTIQUES'],
-      ['Quantité autorisée', this.getQuantiteAutorisee(this.selectedDepot.id).toFixed(2) + ' kg'],
+      ['Quantité autorisée', this.getQuantiteAutorisee(this.selectedDepot.id).toFixed(0) + ' kg'],
       ['Total voyages', this.filteredVoyages.length],
-      ['Total livré', this.getTotalLivre().toFixed(2) + ' kg'],
-      ['Reste', this.getReste().toFixed(2) + ' kg'],
+      ['Total livré', this.getTotalLivre().toFixed(0) + ' kg'],
+      ['Reste', this.getReste().toFixed(0) + ' kg'],
       []
     ];
     
@@ -759,8 +759,8 @@ export class RecapDepotComponent {
         v.numTicket || '',
         this.getCamionMatricule(v.camionId),
         this.getChauffeurNom(v.chauffeurId),
-        (v.poidsDepot || 0).toFixed(2),
-        this.computeResteCumuleForVoyage(this.filteredVoyages, v).toFixed(2)
+        (v.poidsDepot || 0).toFixed(0),
+        this.computeResteCumuleForVoyage(this.filteredVoyages, v).toFixed(0)
       ]);
     });
     

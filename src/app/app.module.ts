@@ -7,6 +7,7 @@ import { DechargementComponent } from './component/dechargement/dechargement.com
 import { BreadcrumbComponent } from './component/breadcrumb/breadcrumb.component';
 import { RecapComponent } from './component/recap/recap.component';
 import { RecapDepotComponent } from './component/recap-depot/recap-depot.component';
+import { SocieteComponent } from './component/societe/societe.component';
 import { NgModule } from '@angular/core';
 import { HTTP_INTERCEPTORS } from '@angular/common/http';
 import { BASE_PATH } from './api/variables';
@@ -75,6 +76,7 @@ import { Configuration } from './api/configuration';
   RecapDepotComponent,
   DeclarationComponent,
   ConfirmCodeDialogComponent,
+  SocieteComponent,
   ],
   imports: [
     BrowserModule,

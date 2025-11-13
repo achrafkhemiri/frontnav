@@ -19,6 +19,8 @@ import { HttpClient } from '@angular/common/http';
 import { BASE_PATH } from '../../api/variables';
 import { ProjetActifService } from '../../service/projet-actif.service';
 import { NotificationService } from '../../service/notification.service';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmCodeDialogComponent } from '../../shared/confirm-code-dialog.component';
 import * as XLSX from 'xlsx';
 
 @Component({
@@ -146,6 +148,9 @@ export class ChargementComponent {
 
   // Dernier numéro de bon de livraison utilisé (pour auto-incrément)
   lastNumBonLivraison: number | null = null;
+  
+  // Vérifier si le projet a déjà des déchargements
+  hasExistingDechargements: boolean = false;
 
   constructor(
     private chargementService: ChargementControllerService,
@@ -163,6 +168,7 @@ export class ChargementComponent {
     private router: Router,
     private cdr: ChangeDetectorRef,
     private notificationService: NotificationService,
+    private dialog: MatDialog,
     @Inject(BASE_PATH) private basePath: string
   ) {
     // Écouter les changements du projet actif
@@ -495,16 +501,73 @@ export class ChargementComponent {
       _originalClientId: undefined,
       _originalDepotId: undefined
     };
-    // Pré-remplir le numéro de bon de livraison avec le suivant attendu (si disponible)
-    try {
-      const projectKey = this.contextProjetId || this.projetActifId || 'global';
-      const next = this.computeNextNumBonLivraison(projectKey);
-      if (next != null) {
-        this.dialogDechargement.numBonLivraison = String(next);
+    
+    // Pré-remplir le numéro de bon de livraison SEULEMENT si le projet a déjà des déchargements
+    // Sinon, laisser vide pour que l'utilisateur puisse saisir le premier numéro
+    if (this.hasExistingDechargements) {
+      try {
+        // Essayer plusieurs clés: contexte, projet actif, puis global
+        const candidates: Array<number | string | null> = [this.contextProjetId, this.projetActifId, 'global'];
+        let assigned = false;
+        for (const cand of candidates) {
+          const next = this.computeNextNumBonLivraison(cand ?? 'global');
+          if (next != null) {
+            this.dialogDechargement.numBonLivraison = String(next);
+            console.log('✅ Auto-incrémentation numBonLivraison =', next, 'using key', cand ?? 'global');
+            assigned = true;
+            break;
+          }
+        }
+        // Dernier recours: scanner localStorage pour trouver n'importe quel dernier BL connu
+        if (!assigned) {
+          const fallback = this.computeNextFromAnyStored();
+          if (fallback != null) {
+            this.dialogDechargement.numBonLivraison = String(fallback);
+            console.log('✅ Auto-incrémentation numBonLivraison (fallback scan) =', fallback);
+          }
+        }
+      } catch (e) {
+        console.warn('Impossible de pré-remplir numBonLivraison:', e);
       }
-    } catch (e) {
-      console.warn('Impossible de pré-remplir numBonLivraison:', e);
+
+      // Si à ce stade rien n'a été assigné (parce que les IDs de projet ne sont pas encore initialisés),
+      // tenter de réessayer une ou deux fois après un petit délai utile pour l'initialisation asynchrone.
+      try {
+        if (!this.dialogDechargement.numBonLivraison || String(this.dialogDechargement.numBonLivraison).trim() === '') {
+          let attempts = 0;
+          const maxAttempts = 3;
+          const retry = () => {
+            attempts++;
+            const candidates: Array<number | string | null> = [this.contextProjetId, this.projetActifId, 'global'];
+            for (const cand of candidates) {
+              const next = this.computeNextNumBonLivraison(cand ?? 'global');
+              if (next != null) {
+                this.dialogDechargement.numBonLivraison = String(next);
+                console.log('✅ Auto-incrémentation numBonLivraison (retry) =', next, 'using key', cand ?? 'global');
+                return;
+              }
+            }
+            const fallback = this.computeNextFromAnyStored();
+            if (fallback != null) {
+              this.dialogDechargement.numBonLivraison = String(fallback);
+              console.log('✅ Auto-incrémentation numBonLivraison (retry fallback) =', fallback);
+              return;
+            }
+            if (attempts < maxAttempts) {
+              setTimeout(retry, 150);
+            }
+          };
+          // lancer la première tentative après 120ms
+          setTimeout(retry, 120);
+        }
+      } catch (e) {
+        // ne pas bloquer l'ouverture du dialog si l'essai échoue
+        console.warn('Erreur pendant retry pré-remplissage BL:', e);
+      }
+    } else {
+      console.log('ℹ️ Premier déchargement du projet - L\'utilisateur peut saisir le numéro initial');
     }
+    
     this.clientSearchInput = '';
     this.depotSearchInput = '';
     this.showDechargementDialog = true;
@@ -733,7 +796,9 @@ export class ChargementComponent {
         }
         // Filtrer les déchargements du projet actuel
         this.dechargements = allDechargements.filter(d => d.projetId === projetId);
-        console.log('✅ Déchargements chargés:', this.dechargements.length);
+        // Vérifier si le projet a déjà des déchargements
+        this.hasExistingDechargements = this.dechargements.length > 0;
+        console.log('✅ Déchargements chargés:', this.dechargements.length, '- Has existing:', this.hasExistingDechargements);
       },
       error: (err) => console.error('❌ Erreur chargement déchargements:', err)
     });
@@ -765,7 +830,7 @@ export class ChargementComponent {
   private getStoredLastNumBonLivraison(projectKey: number | string): number | null {
     try {
       const key = `lastNumBonLivraison_project_${projectKey}`;
-      const raw = window.sessionStorage.getItem(key);
+      const raw = window.localStorage.getItem(key);
       if (!raw) return null;
       const n = Number(raw);
       return Number.isFinite(n) ? Math.trunc(n) : null;
@@ -777,10 +842,32 @@ export class ChargementComponent {
   private storeLastNumBonLivraison(projectKey: number | string, value: number) {
     try {
       const key = `lastNumBonLivraison_project_${projectKey}`;
-      window.sessionStorage.setItem(key, String(Math.trunc(value)));
+      window.localStorage.setItem(key, String(Math.trunc(value)));
       this.lastNumBonLivraison = Math.trunc(value);
     } catch (e) {
       console.warn('Impossible de stocker lastNumBonLivraison:', e);
+    }
+  }
+
+  // Scanner localStorage pour trouver le plus grand BL stocké (toutes clés confondues)
+  private computeNextFromAnyStored(): number | null {
+    try {
+      const prefix = 'lastNumBonLivraison_project_';
+      let max = -Infinity;
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i);
+        if (!key) continue;
+        if (!key.startsWith(prefix)) continue;
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        const n = Number(raw);
+        if (!Number.isNaN(n) && Number.isFinite(n)) max = Math.max(max, Math.trunc(n));
+      }
+      if (max === -Infinity) return null;
+      return max + 1;
+    } catch (e) {
+      console.warn('Erreur computeNextFromAnyStored:', e);
+      return null;
     }
   }
 
@@ -846,6 +933,29 @@ export class ChargementComponent {
     if (!this.dialogDechargement.numTicket) {
       this.error = 'Le numéro de ticket est obligatoire';
       return;
+    }
+    
+    // ✅ VALIDATION: Si le projet a des déchargements et que numBonLivraison est vide, essayer de le générer
+    if (this.hasExistingDechargements && (!this.dialogDechargement.numBonLivraison || String(this.dialogDechargement.numBonLivraison).trim() === '')) {
+      console.warn('⚠️ numBonLivraison vide alors que hasExistingDechargements=true, tentative de génération...');
+      const candidates: Array<number | string | null> = [this.contextProjetId, this.projetActifId, 'global'];
+      let assigned = false;
+      for (const cand of candidates) {
+        const next = this.computeNextNumBonLivraison(cand ?? 'global');
+        if (next != null) {
+          this.dialogDechargement.numBonLivraison = String(next);
+          console.log('✅ Génération synchrone numBonLivraison =', next, 'using key', cand ?? 'global');
+          assigned = true;
+          break;
+        }
+      }
+      if (!assigned) {
+        const fallback = this.computeNextFromAnyStored();
+        if (fallback != null) {
+          this.dialogDechargement.numBonLivraison = String(fallback);
+          console.log('✅ Génération synchrone numBonLivraison (fallback) =', fallback);
+        }
+      }
     }
     
     // Validation de societeP
@@ -930,10 +1040,17 @@ export class ChargementComponent {
     // Générer la date et heure de Tunisie automatiquement
     const dateDechargement = this.getTunisiaDateTime();
 
+    // 🔍 Log pour déboguer le numBonLivraison
+    console.log('📋 Données avant envoi:', {
+      numBonLivraison: this.dialogDechargement.numBonLivraison,
+      hasExistingDechargements: this.hasExistingDechargements,
+      editingDechargement: this.editingDechargement
+    });
+
     const dechargementDTO = {
       chargementId: this.dialogDechargement.chargementId,
       numTicket: this.dialogDechargement.numTicket,
-      numBonLivraison: this.dialogDechargement.numBonLivraison,
+      numBonLivraison: this.dialogDechargement.numBonLivraison || null,
       poidCamionVide: this.dialogDechargement.poidCamionVide,
       poidComplet: this.dialogDechargement.poidComplet,
       clientId: this.dialogDechargement.clientId,
@@ -942,6 +1059,8 @@ export class ChargementComponent {
       // include autorisation code when selected (backend may accept it)
       autorisationCode: this.dialogDechargement.autorisationCode
     };
+
+    console.log('📤 DTO envoyé au backend:', dechargementDTO);
 
     // 🔀 ÉDITION vs CRÉATION
     if (this.editingDechargement && this.dialogDechargement.id) {
@@ -1592,8 +1711,18 @@ export class ChargementComponent {
 
   openDeleteDialog(chargement: ChargementDTO) {
     if (!this.canAddData()) return;
-    this.chargementToDelete = chargement;
-    this.showDeleteDialog = true;
+    
+    // First require the deletion code
+    const dialogRef = this.dialog.open(ConfirmCodeDialogComponent, { disableClose: true });
+    dialogRef.afterClosed().subscribe((ok: boolean) => {
+      if (ok === true) {
+        // Ajouter un délai pour laisser le backdrop Material Dialog disparaître complètement
+        setTimeout(() => {
+          this.chargementToDelete = chargement;
+          this.showDeleteDialog = true;
+        }, 100);
+      }
+    });
   }
 
   closeDeleteDialog() {

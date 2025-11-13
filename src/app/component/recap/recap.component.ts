@@ -781,15 +781,15 @@ export class RecapComponent {
     doc.setFont('helvetica', 'normal');
     doc.text(`Client: ${this.selectedClient.nom}`, 14, 25);
     doc.text(`Numéro: ${this.selectedClient.numero || 'N/A'}`, 14, 31);
-    doc.text(`Quantité Total autorisée: ${this.getQuantiteAutorisee(this.selectedClient.id).toFixed(2)} kg`, 14, 37);
+    doc.text(`Quantité Total autorisée: ${this.getQuantiteAutorisee(this.selectedClient.id).toFixed(0)} kg`, 14, 37);
     
     // Statistiques
     doc.setFont('helvetica', 'bold');
     doc.text('Statistiques:', 14, 45);
     doc.setFont('helvetica', 'normal');
     doc.text(`Total voyages: ${this.filteredVoyages.length}`, 14, 51);
-    doc.text(`Total livré: ${this.getTotalLivre().toFixed(2)} kg`, 80, 51);
-    doc.text(`Reste: ${this.getReste().toFixed(2)} kg`, 160, 51);
+    doc.text(`Total livré: ${this.getTotalLivre().toFixed(0)} kg`, 80, 51);
+    doc.text(`Reste: ${this.getReste().toFixed(0)} kg`, 160, 51);
     
     // Filtres actifs
     if (this.voyageFilter || this.dateDebut || this.dateFin) {
@@ -824,8 +824,8 @@ export class RecapComponent {
         v.numTicket || '',
         this.getCamionMatricule(v.camionId),
         this.getChauffeurNom(v.chauffeurId),
-        (v.poidsClient || 0).toFixed(2),
-        this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+        (v.poidsClient || 0).toFixed(0),
+        this.getResteCumuleForVoyageByCode(v, 0).toFixed(0)
       ]);
 
       autoTable(doc, {
@@ -855,7 +855,7 @@ export class RecapComponent {
         // Section header for this ticket
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text(`Autorisation: ${code} — Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`, 14, currentY);
+        doc.text(`Autorisation: ${code} — Quantité autorisée: ${quantiteAuth.toFixed(0)} kg`, 14, currentY);
         currentY += 6;
 
         // Table rows: use filteredVoyages but only voyages matching this code
@@ -868,8 +868,8 @@ export class RecapComponent {
           v.numTicket || '',
           this.getCamionMatricule(v.camionId),
           this.getChauffeurNom(v.chauffeurId),
-          (v.poidsClient || 0).toFixed(2),
-          this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+          (v.poidsClient || 0).toFixed(0),
+          this.getResteCumuleForVoyageByCode(v, 0).toFixed(0)
         ]);
 
         if (rows.length === 0) {
@@ -942,12 +942,12 @@ export class RecapComponent {
       [],
       ['Client', this.selectedClient.nom],
       ['Numéro', this.selectedClient.numero || 'N/A'],
-      ['Quantité Total autorisée', this.getQuantiteAutorisee(this.selectedClient.id).toFixed(2) + ' kg'],
+      ['Quantité Total autorisée', this.getQuantiteAutorisee(this.selectedClient.id).toFixed(0) + ' kg'],
       [],
       ['STATISTIQUES'],
       ['Total voyages', this.filteredVoyages.length],
-      ['Total livré', this.getTotalLivre().toFixed(2) + ' kg'],
-      ['Reste', this.getReste().toFixed(2) + ' kg'],
+      ['Total livré', this.getTotalLivre().toFixed(0) + ' kg'],
+      ['Reste', this.getReste().toFixed(0) + ' kg'],
       []
     ];
     
@@ -974,8 +974,8 @@ export class RecapComponent {
           v.numTicket || '',
           this.getCamionMatricule(v.camionId),
           this.getChauffeurNom(v.chauffeurId),
-          (v.poidsClient || 0).toFixed(2),
-          this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+          (v.poidsClient || 0).toFixed(0),
+          this.getResteCumuleForVoyageByCode(v, 0).toFixed(0)
         ]);
       });
     } else {
@@ -984,7 +984,7 @@ export class RecapComponent {
         const quantiteAuth = Number(auth?.quantite || 0);
 
         // Section header for this ticket
-        statsData.push([`Autorisation: ${code}`, `Quantité autorisée: ${quantiteAuth.toFixed(2)} kg`]);
+        statsData.push([`Autorisation: ${code}`, `Quantité autorisée: ${quantiteAuth.toFixed(0)} kg`]);
         statsData.push(['Date', 'Bon Livraison', 'Ticket', 'Matricule', 'Chauffeur', 'Poids (kg)', 'Reste (kg)']);
 
         const rows = this.filteredVoyages.filter(v => {
@@ -1002,8 +1002,8 @@ export class RecapComponent {
               v.numTicket || '',
               this.getCamionMatricule(v.camionId),
               this.getChauffeurNom(v.chauffeurId),
-              (v.poidsClient || 0).toFixed(2),
-              this.getResteCumuleForVoyageByCode(v, 0).toFixed(2)
+              (v.poidsClient || 0).toFixed(0),
+              this.getResteCumuleForVoyageByCode(v, 0).toFixed(0)
             ]);
           });
         }
