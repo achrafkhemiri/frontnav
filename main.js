@@ -20,6 +20,7 @@ try {
 let backendProcess;
 let logWindow = null;
 let logBuffer = '';
+const MAX_LOG_BUFFER_SIZE = 1000000; // 1MB max pour éviter l'erreur RangeError
 const { app: electronApp } = require('electron');
 // allow reassignment when we force a different userData location
 let userDataPath = app.getPath ? app.getPath('userData') : (electronApp && electronApp.getPath ? electronApp.getPath('userData') : null);
@@ -45,6 +46,11 @@ function writeStartupLog(msg) {
     const p = userDataPath ? path.join(userDataPath, 'navire-startup.log') : null;
     const entry = `[${new Date().toISOString()}] ${msg}\n`;
     // console.log(entry);
+    // Limiter la taille du buffer pour éviter RangeError
+    if (logBuffer.length + entry.length > MAX_LOG_BUFFER_SIZE) {
+      // Garder seulement les derniers 500KB
+      logBuffer = logBuffer.substring(logBuffer.length - 500000);
+    }
     logBuffer += entry;
     if (p) fs.appendFileSync(p, entry, 'utf8');
   } catch (e) {

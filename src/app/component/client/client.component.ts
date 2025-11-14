@@ -1534,11 +1534,12 @@ export class ClientComponent {
     let currentRow = 0;
 
     // Titre principal
-    XLSX.utils.sheet_add_aoa(ws, [[`LISTE DES CLIENTS`]], { origin: { r: currentRow, c: 0 } });
+    XLSX.utils.sheet_add_aoa(ws, [[`Liste des Clients`]], { origin: { r: currentRow, c: 0 } });
     ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
     currentRow++;
+    currentRow++; // Ligne vide après le titre
 
-    // Informations du projet (navire / port / produit / projet)
+    // Informations du projet (navire / port / produit / sociétés)
     const projet = this.contextProjet || this.projetActif;
     if (projet) {
       if (projet.nomNavire) {
@@ -1553,11 +1554,6 @@ export class ClientComponent {
       }
       if (projet.nomProduit) {
         XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${projet.nomProduit}`]], { origin: { r: currentRow, c: 0 } });
-        ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
-        currentRow++;
-      }
-      if (projet.nom) {
-        XLSX.utils.sheet_add_aoa(ws, [[`Projet: ${projet.nom}`]], { origin: { r: currentRow, c: 0 } });
         ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
         currentRow++;
       }
@@ -1592,6 +1588,23 @@ export class ClientComponent {
         currentRow++;
       }
     }
+
+    // Ligne vide
+    currentRow++;
+
+    // Statistiques (calculées une seule fois, réutilisées plus tard)
+    const totalClientsCalc = this.filteredClients.length;
+    const totalQuantiteAutoriseeCalc = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getQuantitePourProjet(c) || 0), 0
+    );
+    const totalEnleveCalc = this.filteredClients.reduce((sum, c) => 
+      sum + (this.getTotalLivreClient(c.id) || 0), 0
+    );
+    const totalResteCalc = totalQuantiteAutoriseeCalc - totalEnleveCalc;
+
+    XLSX.utils.sheet_add_aoa(ws, [[`Total Clients: ${totalClientsCalc}     Quantité Totale: ${totalQuantiteAutoriseeCalc.toFixed(0)} Kg     Total Enlevé: ${totalEnleveCalc.toFixed(0)} Kg     Reste Total: ${totalResteCalc.toFixed(0)} Kg`]], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 7 } });
+    currentRow++;
 
     // Ligne vide
     currentRow++;

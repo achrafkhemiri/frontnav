@@ -1240,22 +1240,32 @@ export class DepotComponent {
     ws['!merges'] = ws['!merges'] || [];
     let currentRow = 0;
 
-    XLSX.utils.sheet_add_aoa(ws, [[`LISTE DES DÉPÔTS`]], { origin: { r: currentRow, c: 0 } });
+    XLSX.utils.sheet_add_aoa(ws, [[`Liste des Dépôts`]], { origin: { r: currentRow, c: 0 } });
     ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } });
     currentRow++;
+    currentRow++; // Ligne vide après le titre
 
     const projet = this.contextProjet || this.projetActif;
     if (projet) {
       if (projet.nomNavire) { XLSX.utils.sheet_add_aoa(ws, [[`Navire: ${projet.nomNavire}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
       if (projet.port) { XLSX.utils.sheet_add_aoa(ws, [[`Port: ${projet.port}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
       if (projet.nomProduit) { XLSX.utils.sheet_add_aoa(ws, [[`Produit: ${projet.nomProduit}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
-      if (projet.nom) { XLSX.utils.sheet_add_aoa(ws, [[`Projet: ${projet.nom}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
       const societesSet = (projet as any)?.societeNoms || null;
       let societesStr = '';
       if (societesSet) { try { societesStr = Array.isArray(societesSet) ? societesSet.join(', ') : Array.from(societesSet).join(', '); } catch { societesStr = String(societesSet); } }
-      if (societesStr) { XLSX.utils.sheet_add_aoa(ws, [[`Sociétés: ${societesStr}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; currentRow++; }
+      if (societesStr) { XLSX.utils.sheet_add_aoa(ws, [[`Sociétés: ${societesStr}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; }
       if ((projet as any).dateDebut) { try { XLSX.utils.sheet_add_aoa(ws, [[`Date début projet: ${this.formatDate((projet as any).dateDebut)}`]], { origin: { r: currentRow, c: 0 } }); ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } }); currentRow++; } catch {} }
     }
+
+    currentRow++;
+
+    // Statistiques (comme dans le PDF)
+    const totalDepotsCalc = this.filteredDepots.length;
+    const totalVenduCalc = this.filteredDepots.reduce((sum, d) => sum + (this.getTotalLivreDepot(d.id) || 0), 0);
+
+    XLSX.utils.sheet_add_aoa(ws, [[`Total Dépôts: ${totalDepotsCalc}     Quantité Totale Vendue: ${totalVenduCalc.toFixed(0)} kg`]], { origin: { r: currentRow, c: 0 } });
+    ws['!merges'].push({ s: { r: currentRow, c: 0 }, e: { r: currentRow, c: 6 } });
+    currentRow++;
 
     currentRow++;
 
