@@ -606,15 +606,9 @@ export class ProjetComponent {
           // 🔥 IMPORTANT : Nettoyer le sessionStorage pour éviter les conflits
           window.sessionStorage.removeItem('projetActifId');
           
-          // Mettre à jour le service avec le projet complet
+          // Mettre à jour le service avec le projet complet (une seule fois)
           this.projetActifService.setProjetActif(projetUpdated);
           // console.log('✅ Projet actif mis à jour:', projetUpdated);
-          
-          // 🔥 Forcer une seconde émission après un court délai pour s'assurer que tous les composants reçoivent la notification
-          setTimeout(() => {
-            this.projetActifService.setProjetActif(projetUpdated);
-            // console.log('🔄 Émission forcée du projet actif');
-          }, 100);
         } else {
           console.warn('⚠️ Projet non activé ou selectedProjet null - pas de mise à jour du service');
         }

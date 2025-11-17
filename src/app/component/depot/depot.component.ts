@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectorRef } from '@angular/core';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 import { DepotControllerService } from '../../api/api/depotController.service';
 import { ProjetDepotControllerService } from '../../api/api/projetDepotController.service';
@@ -128,7 +128,8 @@ export class DepotComponent {
     private quantiteService: QuantiteService,
     private http: HttpClient,
     private dialog: MatDialog,
-    @Inject(BASE_PATH) private basePath: string
+    @Inject(BASE_PATH) private basePath: string,
+    private cdr: ChangeDetectorRef
   ) {
     // 🔥 Écouter les changements du projet actif
     this.projetActifService.projetActif$.subscribe(projet => {
@@ -147,6 +148,12 @@ export class DepotComponent {
           }, 50);
         }
       }
+    });
+    
+    // 🔥 Écouter les rafraîchissements manuels (après modification de déchargement)
+    this.notificationService.onRefresh().subscribe(() => {
+      console.log('🔄 [Depot] Rafraîchissement demandé - rechargement des données');
+      this.reloadData();
     });
     
     this.initializeProjetContext();
@@ -172,6 +179,8 @@ export class DepotComponent {
 
   // 🔥 NOUVEAU : Méthode pour recharger toutes les données
   reloadData() {
+    console.log('🔄 [Depot] reloadData() appelé');
+    
     // Réinitialiser le contexte si on n'est pas sur une page de paramètre
     const contextId = window.sessionStorage.getItem('projetActifId');
     if (contextId) {
@@ -184,9 +193,121 @@ export class DepotComponent {
     
     // Recharger toutes les données
     this.loadAllDepots();
-    this.loadDepots();
-    this.loadVoyages();
+    
+    // Charger les dépôts puis les voyages (pour avoir les données fraîches)
+    this.loadDepotsAndVoyages();
+    
     this.updateBreadcrumb();
+  }
+  
+  // Nouvelle méthode pour charger dépôts puis voyages de manière séquentielle
+  private loadDepotsAndVoyages() {
+    const targetProjetId = this.contextProjetId || this.projetActifId;
+    
+    if (!targetProjetId) {
+      console.warn('⚠️ Aucun projet actif - liste des dépôts vide');
+      this.depots = [];
+      this.projetDepots = [];
+      this.voyages = [];
+      this.applyFilter();
+      return;
+    }
+    
+    // Charger les ProjetDepot pour ce projet
+    this.projetDepotService.getProjetDepotsByProjetId(targetProjetId, 'body').subscribe({
+      next: async (data: any) => {
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            const parsed = JSON.parse(text);
+            if (Array.isArray(parsed)) {
+              this.projetDepots = parsed.sort((a, b) => (b.id || 0) - (a.id || 0));
+              await this.loadDepotsDetailsAsync();
+              // Charger les voyages APRÈS les dépôts
+              this.loadVoyages();
+            }
+          } catch (e) {
+            console.error('Erreur parsing projetDepots:', e);
+            this.projetDepots = [];
+            this.depots = [];
+            this.voyages = [];
+            this.applyFilter();
+          }
+        } else if (Array.isArray(data)) {
+          this.projetDepots = data.sort((a, b) => (b.id || 0) - (a.id || 0));
+          await this.loadDepotsDetailsAsync();
+          // Charger les voyages APRÈS les dépôts
+          this.loadVoyages();
+        } else {
+          this.projetDepots = [];
+          this.depots = [];
+          this.voyages = [];
+          this.applyFilter();
+        }
+      },
+      error: err => {
+        console.error('❌ Erreur chargement projetDepots:', err);
+        this.error = 'Erreur chargement des dépôts: ' + (err.error?.message || err.message);
+        this.projetDepots = [];
+        this.depots = [];
+        this.voyages = [];
+        this.applyFilter();
+      }
+    });
+  }
+  
+  // Version async de loadDepotsDetails
+  private loadDepotsDetailsAsync(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.projetDepots.length === 0) {
+        this.depots = [];
+        this.applyFilter();
+        resolve();
+        return;
+      }
+
+      const depotIds = [...new Set(this.projetDepots.map(pd => pd.depotId))];
+      
+      this.depotService.getAllDepots('body').subscribe({
+        next: async (data: any) => {
+          let allDepots: DepotDTO[] = [];
+          
+          if (data instanceof Blob) {
+            const text = await data.text();
+            try {
+              const parsed = JSON.parse(text);
+              allDepots = Array.isArray(parsed) ? parsed : [];
+            } catch (e) {
+              console.error('Erreur parsing depots:', e);
+            }
+          } else if (Array.isArray(data)) {
+            allDepots = data;
+          }
+          
+          this.depots = allDepots
+            .filter(depot => depotIds.includes(depot.id!))
+            .map(depot => {
+              const projetDepot = this.projetDepots.find(pd => pd.depotId === depot.id);
+              return {
+                ...depot,
+                projetDepotId: projetDepot?.id,
+                quantiteAutorisee: projetDepot?.quantiteAutorisee || 0
+              } as DepotWithQuantite;
+            })
+            .sort((a, b) => (b.id || 0) - (a.id || 0));
+          
+          console.log('✅ [Depot] Dépôts rechargés:', this.depots.length);
+          this.applyFilter();
+          resolve();
+        },
+        error: (err: any) => {
+          console.error('❌ Erreur chargement détails dépôts:', err);
+          this.depots = [];
+          this.applyFilter();
+          resolve();
+        }
+      });
+    });
   }
 
   loadProjetDetails(projetId: number, isContext: boolean = false) {
@@ -928,6 +1049,11 @@ export class DepotComponent {
           } else {
             this.voyages = Array.isArray(data) ? data : [];
           }
+          console.log('✅ [Depot] Voyages rechargés:', this.voyages.length);
+          // Réappliquer le filtre pour recalculer les quantités
+          this.applyFilter();
+          // Forcer la détection de changements
+          this.cdr.detectChanges();
         },
         error: (err: any) => {
           console.error('Erreur chargement voyages:', err);
@@ -950,6 +1076,11 @@ export class DepotComponent {
           } else {
             this.voyages = Array.isArray(data) ? data : [];
           }
+          console.log('✅ [Depot] Voyages rechargés:', this.voyages.length);
+          // Réappliquer le filtre pour recalculer les quantités
+          this.applyFilter();
+          // Forcer la détection de changements
+          this.cdr.detectChanges();
         },
         error: (err: any) => {
           console.error('Erreur chargement voyages:', err);
@@ -962,9 +1093,10 @@ export class DepotComponent {
   // Calculer la quantité livrée pour un dépôt
   getQuantiteLivree(depot: DepotWithQuantite): number {
     if (!depot.id) return 0;
-    return this.voyages
-      .filter(v => v.depotId === depot.id)
-      .reduce((sum, v) => sum + (v.quantite || 0), 0);
+    const voyagesDepot = this.voyages.filter(v => v.depotId === depot.id);
+    const total = voyagesDepot.reduce((sum, v) => sum + (v.poidsDepot || 0), 0);
+    
+    return total;
   }
 
   // Calculer le reste pour un dépôt

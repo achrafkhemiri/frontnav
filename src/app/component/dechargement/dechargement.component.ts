@@ -49,6 +49,7 @@ export class DechargementComponent implements OnInit {
   camions: CamionDTO[] = [];
   chauffeurs: ChauffeurDTO[] = [];
   projetsClients: any[] = [];
+  projetsDepots: any[] = []; // 🔥 Ajout pour gérer les quantités autorisées des dépôts
   
   // Filters
   activeFilter: string = 'all';
@@ -714,6 +715,7 @@ export class DechargementComponent implements OnInit {
     if (!projetActifId) {
       console.log('⚠️ [Dechargement] Pas de projet actif, impossible de charger les dépôts');
       this.depots = [];
+      this.projetsDepots = [];
       return;
     }
     
@@ -721,6 +723,7 @@ export class DechargementComponent implements OnInit {
     
     // Vider la liste des dépôts avant de charger les nouveaux
     this.depots = [];
+    this.projetsDepots = [];
     
     // Utiliser l'endpoint spécifique au projet avec HttpClient
     const url = `${this.basePath}/api/projets/${projetActifId}/depots`;
@@ -730,10 +733,61 @@ export class DechargementComponent implements OnInit {
       next: (data) => {
         this.depots = data;
         console.log(`✅ [Dechargement] ${this.depots.length} dépôt(s) chargé(s) pour le projet ${projetActifId}:`, this.depots.map(d => d.nom));
+        
+        // 🔥 Charger les quantités autorisées pour chaque dépôt via ProjetDepot
+        this.loadProjetsDepots(projetActifId);
       },
       error: (err) => {
         console.error('❌ Erreur chargement dépôts:', err);
         this.depots = [];
+        this.projetsDepots = [];
+      }
+    });
+  }
+
+  // 🔥 Charger les associations ProjetDepot avec les quantités autorisées
+  loadProjetsDepots(projetId: number): void {
+    console.log(`📥 [Dechargement] Chargement des projet-dépôts pour le projet ${projetId}...`);
+    
+    const projetDepotService = this.http;
+    const url = `${this.basePath}/api/projet-depot/projet/${projetId}`;
+    
+    projetDepotService.get<any[]>(url, { withCredentials: true }).subscribe({
+      next: async (data: any) => {
+        let pdArray: any[] = [];
+        
+        // Gérer le cas Blob
+        if (data instanceof Blob) {
+          const text = await data.text();
+          try {
+            pdArray = JSON.parse(text);
+          } catch (e) {
+            console.error('❌ Erreur parsing projet-dépôts:', e);
+            pdArray = [];
+          }
+        } else {
+          pdArray = Array.isArray(data) ? data : [];
+        }
+        
+        // projetsDepots contient id (projetDepot id), projetId, depotId, quantiteAutorisee
+        this.projetsDepots = pdArray.map((pd: any) => ({
+          id: pd.id,
+          projetId: pd.projetId || projetId,
+          depotId: pd.depotId,
+          quantiteAutorisee: pd.quantiteAutorisee || 0
+        }));
+
+        console.log('✅ [Dechargement] Projets-dépôts chargés:', this.projetsDepots.length, this.projetsDepots);
+      },
+      error: (err: any) => {
+        console.error('❌ Erreur chargement projet-dépôts:', err);
+        // fallback minimal: créer projetsDepots sans quantite
+        this.projetsDepots = this.depots.map((d: any) => ({
+          id: d.id,
+          projetId: projetId,
+          depotId: d.id,
+          quantiteAutorisee: 0
+        }));
       }
     });
   }
@@ -1690,6 +1744,10 @@ export class DechargementComponent implements OnInit {
     this.showClientDropdown = false;
     this.showDepotDropdown = false;
     this.error = '';
+    
+    // 🔥 Recharger les données pour mettre à jour l'affichage
+    this.loadDechargements();
+    this.loadDepots(); // Cela rechargera aussi projetsDepots via loadProjetsDepots()
   }
 
   // Recherche client pour édition
@@ -1868,6 +1926,62 @@ export class DechargementComponent implements OnInit {
     return reste < 0;
   }
 
+  // 🔥 MÉTHODES POUR LES DÉPÔTS (analogues aux méthodes clients)
+  
+  // Obtenir la quantité autorisée pour un dépôt
+  getQuantiteAutoriseeDepot(depotId: number | undefined): number {
+    if (!depotId || !this.projetActif) return 0;
+    
+    // Charger les projetsDepots si pas encore fait
+    const projetDepot = this.projetsDepots?.find(
+      pd => pd.projetId === this.projetActif.id && pd.depotId === depotId
+    );
+    
+    return projetDepot?.quantiteAutorisee || 0;
+  }
+
+  // Calculer le total déjà livré pour un dépôt
+  getTotalLivreDepot(depotId: number, excludeDechargementId?: number): number {
+    if (!this.projetActif) return 0;
+    
+    const dechargementsFiltres = this.dechargements.filter(d => {
+      // Filtrer par depotId et projetId
+      const match = d.depotId === depotId && d.projetId === this.projetActif.id;
+      // Exclure le déchargement en cours d'édition si spécifié
+      if (excludeDechargementId !== undefined && d.id === excludeDechargementId) {
+        return false;
+      }
+      return match;
+    });
+    
+    if (excludeDechargementId !== undefined) {
+      console.log(`  📦 Déchargements trouvés pour dépôt ${depotId} (excluant ID ${excludeDechargementId}):`, dechargementsFiltres.length);
+    }
+    
+    return dechargementsFiltres.reduce((sum, d) => {
+      const poidsNet = (d.poidComplet || 0) - (d.poidCamionVide || 0);
+      return sum + poidsNet;
+    }, 0);
+  }
+
+  // Calculer le reste pour un dépôt
+  getResteDepot(depotId: number, excludeDechargementId?: number): number {
+    const quantiteAutorisee = this.getQuantiteAutoriseeDepot(depotId);
+    const totalLivre = this.getTotalLivreDepot(depotId, excludeDechargementId);
+    return quantiteAutorisee - totalLivre;
+  }
+
+  // Vérifier si un dépôt a dépassé sa quantité autorisée
+  isDepotEnDepassement(depotId: number | undefined): boolean {
+    if (!depotId) return false;
+    
+    // En mode édition, exclure le déchargement en cours du calcul
+    const excludeId = this.editMode && this.selectedDechargement ? this.selectedDechargement.id : undefined;
+    const reste = this.getResteDepot(depotId, excludeId);
+    
+    return reste < 0;
+  }
+
   saveDechargement(): void {
     // Réinitialiser l'erreur
     this.error = '';
@@ -1903,6 +2017,44 @@ export class DechargementComponent implements OnInit {
       
       if (poidsNet > resteDisponibleClient) {
         const depassement = poidsNet - resteDisponibleClient;
+        console.log('❌ DÉPASSEMENT détecté:', depassement);
+        this.depassementQuantite = depassement;
+        this.showDepassementModal = true;
+        return; // Afficher la modal immédiatement
+      } else {
+        console.log('✅ Pas de dépassement - Sauvegarde autorisée');
+      }
+    }
+
+    // 🔥 Vérifier également pour les dépôts
+    if (this.dialogDechargement.depotId) {
+      // En mode édition, exclure le déchargement en cours du calcul du reste
+      // MAIS SEULEMENT si c'est le MÊME dépôt
+      let excludeId: number | undefined = undefined;
+      if (this.editMode && this.selectedDechargement) {
+        // Exclure seulement si le dépôt n'a pas changé
+        if (this.selectedDechargement.depotId === this.dialogDechargement.depotId) {
+          excludeId = this.selectedDechargement.id;
+          console.log('🔍 Mode édition - même dépôt, exclusion du déchargement ID:', excludeId);
+        } else {
+          console.log('⚠️ Mode édition - changement de dépôt détecté');
+        }
+      }
+      
+      const quantiteAutorisee = this.getQuantiteAutoriseeDepot(this.dialogDechargement.depotId);
+      const totalLivre = this.getTotalLivreDepot(this.dialogDechargement.depotId, excludeId);
+      const resteDisponibleDepot = this.getResteDepot(this.dialogDechargement.depotId, excludeId);
+      
+      console.log('📊 Vérification dépassement dépôt:');
+      console.log('  - Dépôt ID:', this.dialogDechargement.depotId);
+      console.log('  - Quantité autorisée:', quantiteAutorisee);
+      console.log('  - Total déjà livré:', totalLivre);
+      console.log('  - Reste disponible:', resteDisponibleDepot);
+      console.log('  - Poids net du nouveau déchargement:', poidsNet);
+      console.log('  - Déchargement exclu (ID):', excludeId || 'Aucun');
+      
+      if (poidsNet > resteDisponibleDepot) {
+        const depassement = poidsNet - resteDisponibleDepot;
         console.log('❌ DÉPASSEMENT détecté:', depassement);
         this.depassementQuantite = depassement;
         this.showDepassementModal = true;

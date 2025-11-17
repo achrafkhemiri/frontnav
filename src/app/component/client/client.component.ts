@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectorRef } from '@angular/core';
 import { trigger, state, style, transition, animate } from '@angular/animations';
 import { ClientControllerService } from '../../api/api/clientController.service';
 import { ProjetClientControllerService } from '../../api/api/projetClientController.service';
@@ -136,7 +136,8 @@ export class ClientComponent {
   private dechargementService: DechargementControllerService,
     private http: HttpClient,
     private dialog: MatDialog,
-    @Inject(BASE_PATH) private basePath: string
+    @Inject(BASE_PATH) private basePath: string,
+    private cdr: ChangeDetectorRef
   ) {
     // 🔥 Écouter les changements du projet actif
     this.projetActifService.projetActif$.subscribe(projet => {
@@ -1038,6 +1039,10 @@ export class ClientComponent {
         } else {
           this.voyages = Array.isArray(data) ? data : [];
         }
+        console.log(`✅ [Client] Voyages rechargés: ${this.voyages.length}`);
+        // Forcer la mise à jour de l'affichage
+        this.applyFilter();
+        this.cdr.detectChanges();
       },
       error: (err) => {
         console.error('Erreur chargement voyages:', err);
@@ -1071,6 +1076,9 @@ export class ClientComponent {
         // Filtrer par projet actif
         this.dechargements = all.filter(d => d.projetId === targetProjetId);
         console.log(`✅ ${this.dechargements.length} déchargements chargés pour le projet ${targetProjetId}`);
+        // Forcer la mise à jour de l'affichage
+        this.applyFilter();
+        this.cdr.detectChanges();
       },
       error: (err) => {
         console.error('Erreur chargement déchargements:', err);

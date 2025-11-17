@@ -142,17 +142,27 @@ export class NavbarComponent {
         this.resteQuantite = 0;
         this.pourcentageRestant = 0;
       } else if (p && Object.keys(p).length > 0) {
+        // Vérifier si le projet a vraiment changé avant de recharger
+        const projetIdChanged = !this.projetActif || this.projetActif.id !== p.id;
+        const projetDataChanged = !this.projetActif || this.projetActif.quantiteTotale !== p.quantiteTotale;
+        
         // Si payload complet → affecter directement
         if (p.nomNavire || p.nomProduit) {
           this.projetActif = p;
           console.log('✅ Navbar - Projet actif mis à jour (complet):', this.projetActif);
-          this.loadVoyagesAndCalculateReste();
+          // Recharger uniquement si le projet ou sa quantité ont changé
+          if (projetIdChanged || projetDataChanged) {
+            this.loadVoyagesAndCalculateReste();
+          }
         } else if (p.id) {
           // Payload partiel → mettre à jour au moins l'id pour afficher le bouton immédiatement
           this.projetActif = { ...(this.projetActif || {}), ...p };
           console.log('⚠️ Navbar - Projet actif partiel, chargement des détails...', this.projetActif);
-          this.loadProjectForDisplay(p.id);
-          this.loadVoyagesAndCalculateReste();
+          if (projetIdChanged) {
+            this.loadProjectForDisplay(p.id);
+          } else if (projetDataChanged) {
+            this.loadVoyagesAndCalculateReste();
+          }
         }
       }
     });
@@ -287,30 +297,29 @@ export class NavbarComponent {
       return;
     }
 
-    // Charger tous les voyages du projet
-    this.voyageControllerService.getAllVoyages('body').subscribe({
-      next: async (data) => {
-        let allVoyages: VoyageDTO[] = [];
+    // Charger UNIQUEMENT les voyages du projet spécifique (plus performant)
+    this.voyageControllerService.getVoyagesByProjet(projet.id, 'body').subscribe({
+      next: async (data: any) => {
+        let voyages: VoyageDTO[] = [];
         
         if (data instanceof Blob) {
           const text = await data.text();
           try {
-            allVoyages = JSON.parse(text);
+            voyages = JSON.parse(text);
           } catch (e) {
             console.error('Erreur parsing voyages:', e);
             return;
           }
         } else {
-          allVoyages = data as VoyageDTO[];
+          voyages = data as VoyageDTO[];
         }
         
-        // Filtrer les voyages du projet actuel
-        this.voyages = allVoyages.filter(v => v.projetId === projet.id);
+        this.voyages = voyages;
         
         // Calculer le reste
         this.calculateReste();
       },
-      error: (err) => {
+      error: (err: any) => {
         console.error('Erreur lors du chargement des voyages:', err);
         this.resteQuantite = 0;
         this.pourcentageRestant = 0;

@@ -152,15 +152,21 @@ export class VoyageComponent {
       
       if (projet && projet.id) {
         const previousId = this.projetActifId;
+        const previousQuantite = this.projetActif?.quantiteTotale;
         this.projetActifId = projet.id;
         this.projetActif = projet;
         
-        // 🔥 FIX : Recharger si le projet change OU si c'est la première fois
+        // 🔥 FIX : Recharger UNIQUEMENT si le projet change (pas sur simple mise à jour de quantité)
+        // La quantité changera dans la navbar, mais pas besoin de recharger tous les voyages
         if (!previousId || previousId !== projet.id) {
           console.log('🔄 [Voyage] Rechargement - previousId:', previousId, 'newId:', projet.id);
           setTimeout(() => {
             this.reloadData();
           }, 50);
+        } else if (previousQuantite !== projet.quantiteTotale) {
+          console.log('📊 [Voyage] Quantité mise à jour - Pas de rechargement nécessaire');
+          // La mise à jour de la quantité ne nécessite PAS de recharger les voyages
+          // La navbar se mettra à jour automatiquement
         }
       }
     });
